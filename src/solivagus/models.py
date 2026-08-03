@@ -29,4 +29,5 @@ class UnitStatus(StrEnum):
 class Stage(StrEnum):
     ALL = "all"
     OCR = "ocr"
+    PLAN = "plan"
     TRANSLATE = "translate"

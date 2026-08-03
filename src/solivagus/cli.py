@@ -169,12 +169,38 @@ def import_mvp_cmd(
         typer.echo(f"{key}: {value}")
 
 
+@app.command("plan")
+def plan_cmd(
+    ctx: typer.Context,
+    pdf: Path = typer.Argument(..., help="Input PDF already registered / OCR'd"),
+    force: bool = typer.Option(False, "--force-plan", help="Recompute even if plan hash matches"),
+) -> None:
+    """Build structure tree, translation units, and cache partitions (no API calls)."""
+    from solivagus.pipeline.plan import PlanStageError, run_plan_stage
+
+    settings = ctx.obj["settings"]
+    pdf = pdf.expanduser().resolve()
+    with _open_db(settings.workspace) as db:
+        doc_id, _row = _resolve_document(db, pdf)
+        try:
+            result = run_plan_stage(
+                db, document_id=doc_id, settings=settings, force=force
+            )
+        except PlanStageError as exc:
+            typer.secho(str(exc), fg=typer.colors.RED, err=True)
+            raise typer.Exit(code=2) from exc
+    typer.echo("plan stage complete")
+    for key, value in result.items():
+        typer.echo(f"{key}: {value}")
+
+
 @app.command("run")
 def run_cmd(
     ctx: typer.Context,
     pdf: Path = typer.Argument(..., help="Input PDF"),
     stage: Stage = typer.Option(Stage.ALL, "--stage", help="Pipeline stage"),
     force_ocr: bool = typer.Option(False, "--force-ocr"),
+    force_plan: bool = typer.Option(False, "--force-plan"),
     force_translate: bool = typer.Option(False, "--force-translate"),
     strict: bool = typer.Option(False, "--strict"),
     prevent_sleep: bool = typer.Option(False, "--prevent-sleep"),
@@ -183,6 +209,7 @@ def run_cmd(
     """Run pipeline stages against SQLite-backed workspace state."""
     from solivagus.ocr.checkpoints import OcrConfig
     from solivagus.ocr.runner import OcrStageError, run_ocr_stage
+    from solivagus.pipeline.plan import PlanStageError, run_plan_stage
 
     settings = ctx.obj["settings"]
     pdf = pdf.expanduser().resolve()
@@ -215,6 +242,22 @@ def run_cmd(
                 raise typer.Exit(code=2) from exc
             typer.echo("ocr stage complete")
             for key, value in ocr_result.items():
+                typer.echo(f"{key}: {value}")
+
+        if stage in {Stage.ALL, Stage.PLAN}:
+            doc_id, _row = _resolve_document(db, pdf)
+            try:
+                plan_result = run_plan_stage(
+                    db,
+                    document_id=doc_id,
+                    settings=settings,
+                    force=force_plan,
+                )
+            except PlanStageError as exc:
+                typer.secho(str(exc), fg=typer.colors.RED, err=True)
+                raise typer.Exit(code=2) from exc
+            typer.echo("plan stage complete")
+            for key, value in plan_result.items():
                 typer.echo(f"{key}: {value}")
 
         if stage in {Stage.ALL, Stage.TRANSLATE}:

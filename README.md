@@ -37,6 +37,10 @@ solivagus inspect "example\Attention Is All You Need.pdf"
 solivagus run "example\Attention Is All You Need.pdf" `
   --stage ocr --device gpu:0 --prevent-sleep
 
+# 结构树 + Token / Partition 规划（不调用翻译 API）
+solivagus plan "example\Attention Is All You Need.pdf"
+# 或：solivagus run "example\Attention Is All You Need.pdf" --stage plan --force-plan
+
 # 导入 MVP 旧工作区后跑翻译
 solivagus import-mvp example\Qwen3_TTS.translation --pdf example\Qwen3_TTS.pdf
 solivagus run example\Qwen3_TTS.pdf --stage translate
@@ -45,9 +49,9 @@ solivagus run example\Qwen3_TTS.pdf --stage translate
 solivagus report
 ```
 
-OCR 产物示例：`example\Attention_Is_All_You_Need.solivagus\`（`source.md`、`ocr/batch-*/done.json`）。样例 PDF 与产物在本机 `example/`，不入库。
+OCR 产物示例：`example\Attention_Is_All_You_Need.solivagus\`（`source.md`、`ocr/batch-*/done.json`、`plan-report.json`、`units/`、`partitions/`）。样例 PDF 与产物在本机 `example/`，不入库。
 
-当前进度：Phase 0–2 完成（含 F1 GPU OCR）；下一步 Phase 3 结构树与 Token Planner。细节见 `memory-bank/knowledge/plans/solivagus-v1-roadmap.md`。
+当前进度：Phase 0–3 完成（OCR + 结构/Token 规划）；下一步 Phase 4 Provider 与 KV Cache。细节见 `memory-bank/knowledge/plans/solivagus-v1-roadmap.md`。
 
 ---
 

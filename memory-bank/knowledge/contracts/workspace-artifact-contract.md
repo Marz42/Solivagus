@@ -71,8 +71,9 @@ usage-report.json
 manifest.json
 assets/
 ocr/batch-NNNN/{result.json,source.md,done.json,worker-config.json}
-units/                 # Phase 2 起：OCR 后字符分块种子；Phase 3+ 由结构规划覆写
-partitions/
+units/                 # Phase 3：结构规划写入；OCR 阶段可能有临时字符种子
+partitions/pNN.json
+plan-report.json
 logs/
 ```
 

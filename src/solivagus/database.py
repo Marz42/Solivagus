@@ -150,6 +150,121 @@ class Database:
             )
         return None
 
+    def replace_structural_nodes(
+        self,
+        document_id: int,
+        nodes: list[dict[str, Any]],
+    ) -> list[int]:
+        self.execute(
+            "DELETE FROM structural_nodes WHERE document_id = ?", (document_id,)
+        )
+        temp_to_id: dict[int, int] = {}
+        ordered = sorted(nodes, key=lambda item: int(item["sequence_index"]))
+        # First pass: insert without parents.
+        for node in ordered:
+            cur = self.execute(
+                """
+                INSERT INTO structural_nodes(
+                  document_id, parent_id, node_type, sequence_index, heading_level,
+                  heading_path, source_pages, source_text, source_hash, token_count,
+                  metadata_json
+                ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    document_id,
+                    node["node_type"],
+                    node["sequence_index"],
+                    node.get("heading_level"),
+                    node.get("heading_path"),
+                    node.get("source_pages"),
+                    node.get("source_text"),
+                    node.get("source_hash"),
+                    node.get("token_count"),
+                    node.get("metadata_json"),
+                ),
+            )
+            db_id = int(cur.lastrowid)
+            temp_id = node.get("temp_id")
+            if temp_id is not None:
+                temp_to_id[int(temp_id)] = db_id
+        # Second pass: wire parent_id.
+        for node in ordered:
+            parent_temp = node.get("parent_temp_id")
+            temp_id = node.get("temp_id")
+            if parent_temp is None or temp_id is None:
+                continue
+            child_id = temp_to_id.get(int(temp_id))
+            parent_id = temp_to_id.get(int(parent_temp))
+            if child_id is None or parent_id is None:
+                continue
+            self.execute(
+                "UPDATE structural_nodes SET parent_id = ? WHERE id = ?",
+                (parent_id, child_id),
+            )
+        self.commit()
+        return [temp_to_id[int(n["temp_id"])] for n in ordered if n.get("temp_id") is not None]
+
+    def list_structural_nodes(self, document_id: int) -> list[sqlite3.Row]:
+        return self.fetchall(
+            """
+            SELECT * FROM structural_nodes
+            WHERE document_id = ?
+            ORDER BY sequence_index ASC, id ASC
+            """,
+            (document_id,),
+        )
+
+    def replace_partitions(
+        self,
+        document_id: int,
+        partitions: list[dict[str, Any]],
+    ) -> list[int]:
+        # Units reference partitions; clear units' partition_id then partitions.
+        self.execute(
+            "UPDATE translation_units SET partition_id = NULL WHERE document_id = ?",
+            (document_id,),
+        )
+        self.execute(
+            "DELETE FROM cache_partitions WHERE document_id = ?", (document_id,)
+        )
+        ids: list[int] = []
+        for part in partitions:
+            cur = self.execute(
+                """
+                INSERT INTO cache_partitions(
+                  document_id, sequence_index, source_tokens, context_tokens,
+                  unit_count, prefix_hash, user_id, warmup_status,
+                  expected_cache_tokens, actual_probe_hit_tokens, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    document_id,
+                    part["sequence_index"],
+                    part.get("source_tokens"),
+                    part.get("context_tokens"),
+                    part.get("unit_count"),
+                    part.get("prefix_hash"),
+                    part.get("user_id"),
+                    part.get("warmup_status"),
+                    part.get("expected_cache_tokens"),
+                    part.get("actual_probe_hit_tokens"),
+                    part.get("status", "pending"),
+                ),
+            )
+            ids.append(int(cur.lastrowid))
+        self.commit()
+        return ids
+
+    def list_partitions(self, document_id: int) -> list[sqlite3.Row]:
+        return self.fetchall(
+            """
+            SELECT * FROM cache_partitions
+            WHERE document_id = ?
+            ORDER BY sequence_index ASC, id ASC
+            """,
+            (document_id,),
+        )
+
     def replace_units(
         self,
         document_id: int,
@@ -162,18 +277,24 @@ class Database:
             self.execute(
                 """
                 INSERT INTO translation_units(
-                  document_id, unit_key, sequence_index, source_text, source_hash,
-                  status, translation_text, translation_hash, provider, model,
-                  prompt_version, attempt_count, warning_flags, source_file,
-                  translated_file
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  document_id, partition_id, unit_key, sequence_index, heading_path,
+                  source_pages, source_text, source_hash, source_tokens,
+                  estimated_output_tokens, status, translation_text, translation_hash,
+                  provider, model, prompt_version, attempt_count, warning_flags,
+                  source_file, translated_file
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     document_id,
+                    unit.get("partition_id"),
                     unit["unit_key"],
                     unit["sequence_index"],
+                    unit.get("heading_path"),
+                    unit.get("source_pages"),
                     unit["source_text"],
                     unit["source_hash"],
+                    unit.get("source_tokens"),
+                    unit.get("estimated_output_tokens"),
                     unit["status"],
                     unit.get("translation_text"),
                     unit.get("translation_hash"),

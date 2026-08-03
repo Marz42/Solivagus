@@ -3,7 +3,7 @@ type: paradigma-plan
 title: Solivagus v1 Roadmap
 description: Phased roadmap from MVP freeze through unattended batch production for Solivagus.
 tags: [plan, roadmap, solivagus, v1]
-timestamp: 2026-08-03T21:20:00+08:00
+timestamp: 2026-08-03T21:40:00+08:00
 paradigma:
   schema_version: "0.1"
   temperature: warm
@@ -114,9 +114,10 @@ batch_default_dir: "D:\\PDFS"
 
 ## Phase 3 — 结构树和 Token Planner
 
-- [ ] 结构解析、Unit/Partition、`plan` 与成本预估
-- [ ] 验收：幂等规划；不拆开公式/代码/表
-- [ ] 用正式规划替换 Phase 2 OCR 后的字符分块种子 units
+- [x] 结构解析、Unit/Partition、`plan` 与成本预估
+- [x] 验收：幂等规划；不拆开公式/代码/表（单测）
+- [x] 用正式规划替换 Phase 2 OCR 后的字符分块种子 units
+- [x] CLI：`solivagus plan` / `run --stage plan|all` + `--force-plan`
 
 ## Phase 4 — Provider 与 KV Cache
 
@@ -145,4 +146,4 @@ batch_default_dir: "D:\\PDFS"
 
 **in-progress**
 
-Phase 0–2 完成（含 F1 GPU OCR 实跑）。下一会话：**Phase 3**（结构树 + Token Planner）。
+Phase 0–3 完成。下一会话：**Phase 4**（OAI-compatible Provider + KV Cache warm-up/probe）。

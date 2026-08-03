@@ -35,12 +35,23 @@ class Settings(BaseSettings):
         validation_alias="SOLIVAGUS_BATCH_DIR",
     )
     target_language: str = "简体中文"
-    chunk_chars: int = 12000
+    chunk_chars: int = 12000  # Phase 2 OCR provisional seeds only
     timeout_seconds: int = 300
     retries: int = 3
     temperature: float = 0.1
     send_temperature: bool = True
     thinking: Literal["disabled"] = "disabled"
+
+    # Planning (Phase 3)
+    unit_target_tokens: int = 12_000
+    unit_max_tokens: int = 24_000
+    unit_min_tokens: int = 1_500
+    first_partition_tokens: int = 96_000
+    partition_target_tokens: int = 220_000
+    partition_max_tokens: int = 300_000
+    price_cache_hit_per_million: float = 0.02
+    price_cache_miss_per_million: float = 1.00
+    price_output_per_million: float = 2.00
 
     # OCR
     ocr_pipeline_version: str = "v1.6"

@@ -151,9 +151,9 @@ PDF
 - Characterization 夹具以本机 `example/` 为准（见 `manuals/solivagus-mvp-baseline.md`）；不入库。
 - DeepSeek 价格 profile 的更新频率与告警阈值？
 - 是否在 CLI 增加兼容短别名？（首版不做）
-- Phase 3 结构规划如何平滑替换 OCR 阶段写入的字符分块种子 units？
+- TokenCounter 何时切换到 DeepSeek 官方 exact tokenizer？
 
-已关闭：包/CLI 名 → `solivagus`（ADR-001）；Python → 3.11 基线 / 推荐 3.12 + uv；模型 → OAI-compatible 抽象 + 仅 `deepseek-v4-flash`；批目录惯例 → `D:\PDFS`；样例不入库 → `example/`；MVP 归档 → `legacy/`；preflight → pypdfium2；Phase 2 GPU OCR（F1）→ 已验收。
+已关闭：包/CLI 名 → `solivagus`（ADR-001）；Python → 3.11 基线 / 推荐 3.12 + uv；模型 → OAI-compatible 抽象 + 仅 `deepseek-v4-flash`；批目录惯例 → `D:\PDFS`；样例不入库 → `example/`；MVP 归档 → `legacy/`；preflight → pypdfium2；Phase 2 GPU OCR（F1）→ 已验收；Phase 3 规划替换 OCR 字符种子 units → 已实现。
 
 # Citations
 

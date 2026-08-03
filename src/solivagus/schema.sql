@@ -140,3 +140,5 @@ CREATE TABLE IF NOT EXISTS artifacts (
 CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
 CREATE INDEX IF NOT EXISTS idx_units_document ON translation_units(document_id, sequence_index);
 CREATE INDEX IF NOT EXISTS idx_units_status ON translation_units(status);
+CREATE INDEX IF NOT EXISTS idx_nodes_document ON structural_nodes(document_id, sequence_index);
+CREATE INDEX IF NOT EXISTS idx_partitions_document ON cache_partitions(document_id, sequence_index);

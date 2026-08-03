@@ -22,3 +22,4 @@
 - Phase 2：OCR 子进程 worker、pypdfium2 预检、页面批次 checkpoint/失败拆分、锁与防睡眠、`solivagus report` 夜间汇总。
 - 本机 GPU 验收：F1 `Attention Is All You Need.pdf` → `ocr_complete`（`manuals/solivagus-phase2-ocr-gpu.md`）。
 - 环境说明：`paddlepaddle-gpu` 须从 Paddle 官方索引安装（`known-issues/paddlepaddle-gpu-not-on-pypi.md`）；README 补充 Solivagus 快速开始。
+- Phase 3：结构树解析、Token Unit/Partition 规划、成本预估、`solivagus plan` / `run --stage plan`；规划产物 `plan-report.json`。
