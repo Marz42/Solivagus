@@ -3,7 +3,7 @@ type: paradigma-runtime-state
 title: Active Task
 description: Rebuildable human projection of the active CodingTask YAML facts.
 tags: [runtime, active-task, generated]
-timestamp: 2026-08-03T16:35:28.295935+08:00
+timestamp: 2026-08-03T16:53:57.119683+08:00
 paradigma:
   layer: runtime
   temperature: hot

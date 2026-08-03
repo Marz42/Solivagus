@@ -10,3 +10,10 @@
 
 ### Added
 - 从 Paradigma 模板初始化项目 Memory-Bank。
+- 写入 Solivagus project-brief / architecture / conventions / glossary。
+- 新增 CLI、workspace-artifact、repository 契约与 document-pipeline 领域文档。
+- 新增 `plans/solivagus-v1-roadmap.md`（Phase 0–8）。
+- 新增 ADR-001：包名/CLI/工作区统一为 `solivagus`。
+- 记录环境决策：Python 3.11 基线 / 推荐 3.12、uv、OAI-compatible + 仅 `deepseek-v4-flash`、批目录 `D:\PDFS`。
+- 提交 `requirements-gpu.txt`（已跑通 GPU/OCR 钉选）；整目录忽略 `example/`。
+- 加固 `.gitignore`（`.env`、`.solivagus/`、`example/`、PDF）并添加 `.env.example`。

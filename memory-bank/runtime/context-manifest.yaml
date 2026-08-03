@@ -1,0 +1,67 @@
+manifest_version: '0.1'
+profile: coding
+request:
+  intent: Fill Solivagus knowledge from project-brief for development readiness
+  task_id: TASK-20260803-KB-INIT
+  explicit_paths:
+  - memory-bank/knowledge/project-brief.md
+  - memory-bank/knowledge/architecture.md
+  - memory-bank/knowledge/contracts/repository-contract.md
+  - project-brief/project-brief.md
+  explicit_symbols: []
+  keywords:
+  - Solivagus
+  - PDF
+  - DeepSeek
+  - PaddleOCR
+  - roadmap
+  budget_tokens: 12000
+session_id: SESSION-20260803-KB-INIT
+checkpoint_id: null
+source_digest: sha256:49ac9caa5de6e42baeeec8b4f662233d41766bfc90a1d7f55f959a6ca8e1ca93
+estimated_tokens: 1839
+documents:
+- document_id: memory-bank/knowledge/architecture.md
+  path: memory-bank/knowledge/architecture.md
+  source_kind: knowledge
+  title: System Architecture
+  priority: required
+  estimated_tokens: 130
+  reasons:
+  - mandatory_hot_document
+  - path_match:memory-bank/knowledge/architecture.md
+  - relation_from:memory-bank/knowledge/project-brief.md:informs
+- document_id: memory-bank/knowledge/contracts/repository-contract.md
+  path: memory-bank/knowledge/contracts/repository-contract.md
+  source_kind: knowledge
+  title: Repository Contract
+  priority: required
+  estimated_tokens: 132
+  reasons:
+  - mandatory_hot_document
+  - path_match:memory-bank/knowledge/contracts/repository-contract.md
+  - relation_from:memory-bank/knowledge/project-brief.md:informs
+- document_id: memory-bank/knowledge/conventions.md
+  path: memory-bank/knowledge/conventions.md
+  source_kind: knowledge
+  title: Coding and Collaboration Conventions
+  priority: required
+  estimated_tokens: 144
+  reasons:
+  - mandatory_hot_document
+- document_id: memory-bank/knowledge/project-brief.md
+  path: memory-bank/knowledge/project-brief.md
+  source_kind: knowledge
+  title: Project Brief
+  priority: required
+  estimated_tokens: 1433
+  reasons:
+  - mandatory_hot_document
+  - path_match:memory-bank/knowledge/project-brief.md
+  - keyword_match:DeepSeek
+  - keyword_match:PDF
+  - keyword_match:PaddleOCR
+  - keyword_match:Solivagus
+excluded: []
+warnings: []
+checksum: sha256:e635768e77cc57fcf6f92ebe794fb03b22d9c8a195562d5592a921aeeb0c4858

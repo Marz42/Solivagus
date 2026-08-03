@@ -1,23 +1,32 @@
 # Solivagus Knowledge Index
 
-Agent 路由指南：先读取 runtime active task，再读取本 index，根据任务选择最相关的 1-3 个文档继续阅读。One-shot retrieval 是第一跳，不是终点。
+Agent 路由指南：先恢复 Task/Session 与 Context Manifest，再按任务选择最相关的 1-3 个文档继续阅读。
 
 ## HOT Knowledge
 
-* [Project Brief](project-brief.md) - Project vision, target users, and scope.
-* [System Architecture](architecture.md) - Repository structure and protocol boundaries.
-* [Conventions](conventions.md) - Coding, versioning, and collaboration conventions.
-* [Repository Contract](contracts/repository-contract.md) - Repository-level contract boundaries.
+* [Project Brief](project-brief.md) - Vision, users, scope, non-goals, success criteria.
+* [System Architecture](architecture.md) - Dual pipeline, stack, module boundaries.
+* [Conventions](conventions.md) - Naming, testing, safety, prohibited patterns.
+* [Repository Contract](contracts/repository-contract.md) - Repo layout and ownership.
 
 ## WARM Knowledge
 
-* [Contracts](contracts/) - API, repository, and tooling contracts.
-* [Domains](domains/) - Module-level design documents.
-* [Manuals](manuals/) - Operational guides.
-* [Plans](plans/) - Multi-session roadmaps and implementation plans.
+* [Contracts](contracts/) - CLI, workspace/artifact, repository contracts.
+* [Domains](domains/) - Document processing pipeline.
+* [Plans](plans/) - Solivagus v1 phased roadmap.
+* [Manuals](manuals/) - Operational guides (to be added).
 
 ## COLD Knowledge
 
-* [Decisions](decisions/) - Architecture decision records.
-* [Known Issues](known-issues/) - Debugging notes and recurring issues.
-* [Glossary](glossary.md) - Project terminology and abbreviations.
+* [Decisions](decisions/) - Architecture decision records (ADR-001 package name).
+* [Known Issues](known-issues/) - Recurring issues and workarounds.
+* [Glossary](glossary.md) - Units, partitions, capsules, and project terms.
+
+## Source materials (not OKF knowledge)
+
+* `project-brief/project-brief.md` — full design draft
+* `project-brief/pdf_translate_cli_v0_2.py` — MVP single-script baseline
+* `project-brief/PDF翻译使用速查.md` — MVP usage cheat sheet
+* `project-brief/nightauto.ps1` — unattended batch driver
+* `requirements-gpu.txt` — pinned GPU/OCR stack that already runs
+* `example/` — local-only fixtures (gitignored; includes Qwen3_TTS baseline)

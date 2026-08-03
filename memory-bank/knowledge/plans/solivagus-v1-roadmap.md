@@ -1,0 +1,144 @@
+---
+type: paradigma-plan
+title: Solivagus v1 Roadmap
+description: Phased roadmap from MVP freeze through unattended batch production for Solivagus.
+tags: [plan, roadmap, solivagus, v1]
+timestamp: 2026-08-03T17:20:00+08:00
+paradigma:
+  schema_version: "0.1"
+  temperature: warm
+  lifecycle: evolving
+  update_policy: agent-editable
+  epistemic_status: decision
+  retrieval_hints:
+    zh:
+      - 路线图
+      - Phase
+      - MVP 冻结
+      - 实施顺序
+    en:
+      - roadmap
+      - phases
+      - MVP freeze
+      - implementation order
+  symbols:
+    - Phase 0
+    - Phase 1
+    - Phase 8
+    - solivagus
+  relations:
+    informed_by:
+      - /project-brief.md
+      - /architecture.md
+      - /decisions/adr-001-package-name-solivagus.md
+    related_to:
+      - /domains/document-pipeline.md
+---
+
+# Goal
+
+将已验证的单脚本 MVP 重构为可恢复、可观测、缓存与并发感知的 Solivagus v1 CLI（命令 `solivagus`），达到夜间无人值守批处理生产可用。
+
+# Scope
+
+**包含：** Phase 0–8。
+
+**不包含（首版）：** Web UI、SaaS、RAG/Agent、多 GPU、自托管 LLM、多供应商默认路径、原版式翻译 PDF。
+
+# Approach
+
+```text
+冻结 MVP 与测试样本
+ → 项目骨架 + SQLite（uv + Python 3.11/3.12）
+ → 无人值守 OCR checkpoint
+ → 结构树 + Token Planner
+ → OAI-compatible Provider（DeepSeek flash）+ usage
+ → 分区缓存 warm-up/probe
+ → 8→16→32 并发（评估 64）
+ → 风格胶囊
+ → 机械 QA
+ → HTML 表格翻译 / 批量生产化（D:\PDFS）
+```
+
+业务代码：`src/solivagus/`。依赖钉选：`requirements-gpu.txt`。样例仅本机 `example/`。
+
+默认生产锚点：
+
+```yaml
+model: deepseek-v4-flash
+thinking: disabled
+ocr_batch_pages: 8
+unit_target_tokens: 12000
+unit_max_tokens: 24000
+first_partition_tokens: 96000
+partition_target_tokens: 220000
+partition_max_tokens: 300000
+global_concurrency: 16
+per_document_concurrency: 8
+max_global_concurrency: 64
+target_mode: repeat
+cache_probe_min_ratio: 0.70
+fallback_to_source: true
+batch_default_dir: "D:\\PDFS"
+```
+
+# Tasks
+
+## Phase 0 — 冻结 MVP 基线
+
+- [ ] 归档 `project-brief/pdf_translate_cli_v0_2.py` → `legacy/pdf_translate_cli_v0_2.py`
+- [ ] 以本机 `example/` 建立 characterization 清单（不入库）：
+  - `Attention Is All You Need.pdf`（+ 可选 html/md 对照；有段落/公式/表格，无双栏）
+  - `Aerial Attack Study Boyd.pdf`（较差扫描）
+  - `Vox Latina ...pdf`（尚可扫描）
+  - `Qwen3_TTS.pdf` + `Qwen3_TTS.translation/`（已跑通基线）
+- [ ] 记录复现命令与期望产物路径（指向 example，git 外）
+- [ ] 建立基线测试骨架：表格不炸占位符、OCR-only 后续译、中断续跑、失败英文回退、组装成功
+- [ ] 验收：已跑通样本行为可复述/可对比
+
+## Phase 1 — 项目骨架和 SQLite
+
+- [x] 确认包名/CLI 名 = `solivagus`（ADR-001）
+- [ ] 用 uv 创建业务包 `src/solivagus/` + Typer CLI + 配置加载 + `.env.example`
+- [ ] SQLite schema + `.solivagus/` artifact 约定
+- [ ] 迁入单脚本通用函数；旧 `*.translation/` 导入工具
+- [ ] 验收：`solivagus status` / `inspect` / `run --stage translate` 基于 SQLite
+
+## Phase 2 — 无人值守 OCR
+
+- [ ] OCR 独立子进程、预检、页面批次 checkpoint、失败拆分、锁、防睡眠、夜间报告
+- [ ] 验收：强杀后续跑；坏 PDF 不阻断批次；单页失败带警告完成
+
+## Phase 3 — 结构树和 Token Planner
+
+- [ ] 结构解析、Unit/Partition、`plan` 与成本预估
+- [ ] 验收：幂等规划；不拆开公式/代码/表
+
+## Phase 4 — Provider 与 KV Cache
+
+- [ ] OAI-compatible Provider；默认仅 `deepseek-v4-flash`；thinking disabled；warm-up/probe/本地缓存
+- [ ] 验收：cache hit 可观测；低命中降级；缓存失效不致失败
+
+## Phase 5 — 异步并发
+
+- [ ] Semaphore、barrier、公平队列、自适应限流、单 writer
+- [ ] 验收：并发 16 快于串行；无 SQLite 写冲突
+
+## Phase 6 — 风格胶囊
+
+- [ ] 分区冻结 capsule；跨区术语稳定
+
+## Phase 7 — QA 与专用结构处理
+
+- [ ] 机械 QA、定向修复、表格翻译器、参考文献模式
+
+## Phase 8 — 批量生产化
+
+- [ ] 双队列、`D:\PDFS` 批处理、manifest、配置档案、Task Scheduler 说明
+- [ ] 验收：整夜无人值守；早上一份报告
+
+# Status
+
+**in-progress**
+
+知识库与命名决策已就绪；下一会话进入 **Phase 0**。

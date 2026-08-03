@@ -1,24 +1,83 @@
 # ============================================================
+# Secrets & local credentials — NEVER commit
+# ============================================================
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+credentials.json
+**/secrets/
+**/credentials/
+
+# ============================================================
 # IDE
 # ============================================================
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # ============================================================
-# Python
+# Python / uv
 # ============================================================
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
 build/
 dist/
-*.egg-info/
+.venv/
+venv/
+.env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
 .tmp/
 
-# Rebuildable Paradigma machine indexes
+# Rebuildable Paradigma machine indexes / catalogs
 .paradigma/cache/
+
+# ============================================================
+# Solivagus local samples & runtime (NEVER commit)
+# ============================================================
+# Full local fixture directory (PDFs, HTML, MD, MVP outputs, private pins)
+example/
+
+# Formal workspace + MVP sidecars
+.solivagus/
+**/.solivagus/
+.pdf2zh/
+**/.pdf2zh/
+*.translation/
+**/*.translation/
+
+**/supervisor.lock
+**/.run.lock
+**/cache/translations/
+
+.paddleocr/
+.paddlex/
+**/paddle_models/
+
+# PDFs anywhere under the repo by default
+*.pdf
+
+# ============================================================
+# Logs & local reports
+# ============================================================
+*.log
+nightly-*.md
+nightly-*.json
 
 # ============================================================
 # OS
 # ============================================================
 Thumbs.db
+Desktop.ini
 .DS_Store
