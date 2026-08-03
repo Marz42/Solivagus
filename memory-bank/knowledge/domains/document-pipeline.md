@@ -3,7 +3,7 @@ type: paradigma-domain
 title: Document Processing Pipeline
 description: Dual OCR/translation pipeline responsibilities and risks for Solivagus.
 tags: [domain, pipeline, ocr, translation, solivagus]
-timestamp: 2026-08-03T17:20:00+08:00
+timestamp: 2026-08-03T21:20:00+08:00
 paradigma:
   schema_version: "0.1"
   temperature: warm
@@ -59,10 +59,10 @@ paradigma:
 
 # Dependencies
 
-- PaddleOCR-VL / PaddlePaddle（本地 GPU）
+- PaddleOCR-VL / PaddlePaddle（本地 GPU；F1 实跑已验证）
 - DeepSeek Chat Completions（网络）
-- SQLite 工作区状态
-- PyMuPDF 预检
+- SQLite 工作区状态（`.solivagus/state.db`）
+- pypdfium2 预检
 
 # Related Contracts
 

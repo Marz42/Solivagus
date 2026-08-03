@@ -4,12 +4,50 @@
 
 当前应用版本：`0.1.0`（Memory harness / Paradigma：见根目录 `VERSION`）
 
+把英文技术 PDF 转成可进 Obsidian 等阅读器的中文 / 双语 Markdown。状态在工作区 `.solivagus/`，每文档产物在 PDF 旁的 `*.solivagus/` 目录。
+
+## 快速开始
+
+### 环境
+
+Python **3.11+**（推荐 3.12）。GPU OCR 依赖与业务包**分步**安装：`requirements-gpu.txt` 是钉选清单，不是一键安装器（公共 PyPI 无 `paddlepaddle-gpu==3.3.0`）。
+
 ```powershell
-uv pip install -e ".[dev]" --python python3.12
+# 可复用已验证的 GPU .venv，或新建后按下列步骤安装
+uv pip install paddlepaddle-gpu==3.3.0 `
+  --python .\.venv\Scripts\python.exe `
+  -i https://www.paddlepaddle.org.cn/packages/stable/cu129/
+uv pip install "paddleocr[doc-parser]>=3.6.0,<3.7" --python .\.venv\Scripts\python.exe
+uv pip install -e ".[dev]" --python .\.venv\Scripts\python.exe
+.\.venv\Scripts\Activate.ps1
+solivagus version
+```
+
+复制 `.env.example` → `.env`，填入 `LLM_API_KEY`（仅翻译阶段需要）。
+
+### 常用命令
+
+```powershell
+# 状态 / 诊断
 solivagus status
+solivagus status "example\Attention Is All You Need.pdf"
+solivagus inspect "example\Attention Is All You Need.pdf"
+
+# OCR（本机 GPU 已验收）
+solivagus run "example\Attention Is All You Need.pdf" `
+  --stage ocr --device gpu:0 --prevent-sleep
+
+# 导入 MVP 旧工作区后跑翻译
 solivagus import-mvp example\Qwen3_TTS.translation --pdf example\Qwen3_TTS.pdf
 solivagus run example\Qwen3_TTS.pdf --stage translate
+
+# 夜间汇总
+solivagus report
 ```
+
+OCR 产物示例：`example\Attention_Is_All_You_Need.solivagus\`（`source.md`、`ocr/batch-*/done.json`）。样例 PDF 与产物在本机 `example/`，不入库。
+
+当前进度：Phase 0–2 完成（含 F1 GPU OCR）；下一步 Phase 3 结构树与 Token Planner。细节见 `memory-bank/knowledge/plans/solivagus-v1-roadmap.md`。
 
 ---
 

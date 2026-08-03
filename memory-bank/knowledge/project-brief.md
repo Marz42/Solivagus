@@ -138,7 +138,7 @@ manifest.json
 
 - 保持 CLI；不建设 Web UI / 服务端 / 多用户系统。
 - 正式项目在 MVP 已验证链路上重构，不更换 PaddleOCR-VL + DeepSeek 路线。
-- Python：**3.11 为基线**；开发机与夜间机一致；**推荐 3.12**（当前开发环境已是 3.12）。包管理使用 **uv**。
+- Python：**3.11 为基线**；开发机与夜间机一致；**推荐 3.12**（已验证 GPU `.venv` 为 3.11.15，机上亦有 3.12）。包管理使用 **uv**。
 - LLM：保留 OpenAI-compatible Provider 抽象；**当前唯一生产模型 `deepseek-v4-flash`**；Key 不做日常/夜间区分。翻译请求必须显式 `thinking: disabled`。
 - 平台并发上限 ≠ 客户端默认并发。初始建议：`global=16`、`per_document=8`、`per_partition=8`、`max_global=64`。
 - 文档结构优先于固定字符切分；表格/公式/代码/图片为独立节点。

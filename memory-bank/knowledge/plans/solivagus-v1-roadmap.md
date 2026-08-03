@@ -3,7 +3,7 @@ type: paradigma-plan
 title: Solivagus v1 Roadmap
 description: Phased roadmap from MVP freeze through unattended batch production for Solivagus.
 tags: [plan, roadmap, solivagus, v1]
-timestamp: 2026-08-03T17:20:00+08:00
+timestamp: 2026-08-03T21:20:00+08:00
 paradigma:
   schema_version: "0.1"
   temperature: warm
@@ -109,11 +109,14 @@ batch_default_dir: "D:\\PDFS"
 
 - [x] OCR 独立子进程、预检、页面批次 checkpoint、失败拆分、锁、防睡眠、夜间报告
 - [x] 验收：单元测试覆盖强杀后续跑（done.json skip）、坏批次拆分、单页失败带警告继续
-- [ ] （可选本机 GPU）对 `example/*.pdf` 跑 `solivagus run --stage ocr` 实机验证
+- [x] 本机 GPU：`solivagus run "example\Attention Is All You Need.pdf" --stage ocr --device gpu:0 --prevent-sleep` → `ocr_complete`（见 `manuals/solivagus-phase2-ocr-gpu.md`）
+- [ ] （可选）F2/F3 OCR 质量抽查笔记
+
 ## Phase 3 — 结构树和 Token Planner
 
 - [ ] 结构解析、Unit/Partition、`plan` 与成本预估
 - [ ] 验收：幂等规划；不拆开公式/代码/表
+- [ ] 用正式规划替换 Phase 2 OCR 后的字符分块种子 units
 
 ## Phase 4 — Provider 与 KV Cache
 
@@ -142,4 +145,4 @@ batch_default_dir: "D:\\PDFS"
 
 **in-progress**
 
-Phase 2 OCR 骨架已完成。下一会话进入 **Phase 3**（结构树 + Token Planner），或先做本机 GPU OCR 实跑。
+Phase 0–2 完成（含 F1 GPU OCR 实跑）。下一会话：**Phase 3**（结构树 + Token Planner）。

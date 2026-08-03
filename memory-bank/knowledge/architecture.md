@@ -3,7 +3,7 @@ type: paradigma-architecture
 title: System Architecture
 description: Top-level architecture, technology stack, module boundaries, and key constraints for Solivagus.
 tags: [architecture, system, solivagus]
-timestamp: 2026-08-03T17:20:00+08:00
+timestamp: 2026-08-03T21:20:00+08:00
 paradigma:
   schema_version: "0.1"
   temperature: hot
@@ -67,25 +67,31 @@ requirements-gpu.txt # 已跑通 GPU/OCR 依赖钉选
 tests/
 ```
 
-安装：
+安装（业务包与 GPU 栈分开）：
 
 ```powershell
-uv pip install -e ".[dev]" --python python3.12
-# Windows example:
-# uv pip install -e ".[dev]" --python "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe"
+# 1) 复用或创建 .venv（已验证：复制既有 GPU .venv，Python 3.11.15）
+# 2) Paddle GPU 须走官方索引（公共 PyPI 无 paddlepaddle-gpu==3.3.0）
+uv pip install paddlepaddle-gpu==3.3.0 `
+  --python .\.venv\Scripts\python.exe `
+  -i https://www.paddlepaddle.org.cn/packages/stable/cu129/
+uv pip install "paddleocr[doc-parser]>=3.6.0,<3.7" --python .\.venv\Scripts\python.exe
+# 3) 业务包 + 开发依赖（不覆盖已装 paddle）
+uv pip install -e ".[dev]" --python .\.venv\Scripts\python.exe
 solivagus version
-pd version
 ```
+
+`requirements-gpu.txt` 是已跑通钉选清单，不是一键安装器。详见 `known-issues/paddlepaddle-gpu-not-on-pypi.md`。
 
 # Technology Stack
 
 | Layer | Choice | Notes |
 |-------|--------|-------|
-| Language | Python **3.11 基线**，推荐 **3.12** | 开发机与夜间机一致；当前开发环境 3.12.9 |
+| Language | Python **3.11 基线**，推荐 **3.12** | 已验证 GPU `.venv` 为 3.11.15；机上亦有 3.12.9 |
 | Packaging | **uv** | 创建/同步环境与锁定；与 Paradigma 的 pip 安装可并存 |
 | CLI | Typer | 入口命令 `solivagus` |
-| OCR | `paddleocr[doc-parser]` + `paddlepaddle-gpu` | 钉选见 `requirements-gpu.txt`（paddleocr 3.6.0 / paddlepaddle-gpu 3.3.0 等） |
-| PDF preflight | PyMuPDF 或等价 | 首版不替代 OCR；MVP 侧有 pypdfium2 等，正式选型 Phase 1 确认 |
+| OCR | `paddleocr[doc-parser]` + `paddlepaddle-gpu` | 钉选见 `requirements-gpu.txt`（paddleocr 3.6.0 / paddlepaddle-gpu 3.3.0 等）；F1 GPU 实跑已通过 |
+| PDF preflight | **pypdfium2** | Phase 2 已采用；不替代 OCR |
 | HTTP | httpx.AsyncClient（或 openai SDK 客户端） | 长 timeout；OAI-compatible |
 | State | SQLite WAL（aiosqlite 或同步封装） | 工作区 `.solivagus/state.db` |
 | Config | pydantic-settings + YAML profile | API Key 仅 `.env` |
@@ -143,11 +149,11 @@ PDF
 # Open Questions
 
 - Characterization 夹具以本机 `example/` 为准（见 `manuals/solivagus-mvp-baseline.md`）；不入库。
-- 正式 preflight 库最终选 PyMuPDF 还是沿用 MVP 的 pypdfium2？
 - DeepSeek 价格 profile 的更新频率与告警阈值？
 - 是否在 CLI 增加兼容短别名？（首版不做）
+- Phase 3 结构规划如何平滑替换 OCR 阶段写入的字符分块种子 units？
 
-已关闭：包/CLI 名 → `solivagus`（ADR-001）；Python → 3.11 基线 / 推荐 3.12 + uv；模型 → OAI-compatible 抽象 + 仅 `deepseek-v4-flash`；批目录惯例 → `D:\PDFS`；样例不入库 → `example/`；MVP 归档 → `legacy/`。
+已关闭：包/CLI 名 → `solivagus`（ADR-001）；Python → 3.11 基线 / 推荐 3.12 + uv；模型 → OAI-compatible 抽象 + 仅 `deepseek-v4-flash`；批目录惯例 → `D:\PDFS`；样例不入库 → `example/`；MVP 归档 → `legacy/`；preflight → pypdfium2；Phase 2 GPU OCR（F1）→ 已验收。
 
 # Citations
 

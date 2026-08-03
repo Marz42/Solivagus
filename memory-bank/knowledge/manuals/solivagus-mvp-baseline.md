@@ -108,7 +108,8 @@ python -m unittest tests.characterization.test_mvp_baseline -v
 - [x] Fixture 清单与 SHA-256 已记录
 - [x] F4 复现命令与产物路径已记录
 - [x] `tests/characterization/test_mvp_baseline.py` 可在无 GPU 下通过
-- [ ] （可选本地）对 F1 执行 `--ocr-only` 人工抽查 `source.md`
+- [x] 正式 CLI 对 F1 执行 GPU OCR（`solivagus run --stage ocr`，见 `manuals/solivagus-phase2-ocr-gpu.md`）
+- [ ] （可选本地）对照 F1 HTML/MD 做 OCR 质量人工抽查笔记
 - [ ] （可选本地）对 F2/F3 记录 OCR 质量笔记
 
 # Rollback
@@ -121,7 +122,7 @@ python -m unittest tests.characterization.test_mvp_baseline -v
 |---------|--------------|--------|
 | unittest 跳过 F4 断言 | `example/` 不存在或被清空 | 恢复本机样例；测试仍应通过纯函数用例 |
 | 续跑报 PDF hash 不匹配 | PDF 被替换或路径指向不同文件 | 核对 SHA-256；或换 `--work-dir` / `--force-ocr` |
-| OCR import 失败 | 未安装 `requirements-gpu.txt` | 用 uv/pip 安装 GPU 钉选；CI 不跑真实 OCR |
+| OCR import 失败 | GPU 栈未装或 `paddlepaddle-gpu` 装错索引 | 按 README / `known-issues/paddlepaddle-gpu-not-on-pypi.md` 分步安装；CI 不跑真实 OCR |
 
 # Citations
 

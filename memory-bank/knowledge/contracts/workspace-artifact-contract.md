@@ -3,7 +3,7 @@ type: paradigma-contract
 title: Workspace and Artifact Contract
 description: Workspace SQLite state and per-document artifact layout for Solivagus.
 tags: [contract, workspace, artifacts, sqlite, solivagus]
-timestamp: 2026-08-03T17:20:00+08:00
+timestamp: 2026-08-03T21:20:00+08:00
 paradigma:
   schema_version: "0.1"
   temperature: warm
@@ -53,13 +53,16 @@ paradigma:
 <workspace>/.solivagus/supervisor.lock
 ```
 
-MVP 兼容：PDF 旁 `*.translation/` 可由导入工具映射到正式 artifact 布局。
+正式 artifact 目录：PDF 同级 `{sanitized_stem}.solivagus/`（空格等字符会 sanitize，例如 `Attention_Is_All_You_Need.solivagus`）。
 
-本地样例（不入库）：`example/Qwen3_TTS.translation/` 等。
+MVP 兼容：PDF 旁 `*.translation/` 可由 `solivagus import-mvp` 映射到正式布局。
+
+本地样例（不入库）：`example/Qwen3_TTS.translation/`、`example/Attention_Is_All_You_Need.solivagus/` 等。
 
 ## Per-document artifacts
 
 ```text
+preflight.json
 source.md
 translated.zh.md
 translated.bilingual.md
@@ -67,8 +70,8 @@ qa-report.md
 usage-report.json
 manifest.json
 assets/
-ocr/batch-NNNN/{result.json,source.md,done.json}
-units/
+ocr/batch-NNNN/{result.json,source.md,done.json,worker-config.json}
+units/                 # Phase 2 起：OCR 后字符分块种子；Phase 3+ 由结构规划覆写
 partitions/
 logs/
 ```

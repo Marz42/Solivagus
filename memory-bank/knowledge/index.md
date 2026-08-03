@@ -13,14 +13,9 @@ Agent 路由指南：先恢复 Task/Session 与 Context Manifest，再按任务�
 
 * [Contracts](contracts/) - CLI, workspace/artifact, repository contracts.
 * [Domains](domains/) - Document processing pipeline.
-* [Plans](plans/) - Solivagus v1 phased roadmap.
-* [Manuals](manuals/) - MVP baseline characterization and future ops guides.
-
-## COLD Knowledge
-
-* [Decisions](decisions/) - Architecture decision records (ADR-001 package name).
-* [Known Issues](known-issues/) - Recurring issues and workarounds.
-* [Glossary](glossary.md) - Units, partitions, capsules, and project terms.
+* [Manuals](manuals/) - MVP baseline + Phase 2 GPU OCR verification.
+* [Plans](plans/) - Solivagus v1 phased roadmap (Phase 0–2 done; next Phase 3).
+* [Known Issues](known-issues/) - e.g. paddlepaddle-gpu not on public PyPI.
 
 ## Source materials (not OKF knowledge)
 

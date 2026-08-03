@@ -50,7 +50,7 @@ paradigma:
 # Code Style
 
 - Python 3.11+（推荐 3.12）；用 **uv** 管理虚拟环境与依赖同步。
-- GPU/OCR 运行依赖以 `requirements-gpu.txt` 为已验证钉选；业务包元数据在 Phase 1 的 `pyproject.toml` 中声明。
+- GPU/OCR 运行依赖以 `requirements-gpu.txt` 为已验证钉选清单（非一键安装）；`paddlepaddle-gpu` 须从 Paddle 官方索引安装。业务包元数据在 `pyproject.toml`。
 - ruff 格式化 + lint；类型提示覆盖公共 API；mypy 逐步收紧。
 - 异步 IO 用于翻译调度；OCR 保持子进程边界。
 - 配置用 YAML profile + `.env` 密钥；价格与模型名可配置，不写死进逻辑。

@@ -20,3 +20,5 @@
 - Phase 0：归档 `legacy/pdf_translate_cli_v0_2.py`，新增 MVP baseline manual 与 `tests/characterization/test_mvp_baseline.py`。
 - Phase 1：新增 `src/solivagus`（Typer CLI + SQLite + MVP 导入 + translate stage），`config.example.yaml`，发行包名改为 `solivagus` 并保留 `pd` 入口。
 - Phase 2：OCR 子进程 worker、pypdfium2 预检、页面批次 checkpoint/失败拆分、锁与防睡眠、`solivagus report` 夜间汇总。
+- 本机 GPU 验收：F1 `Attention Is All You Need.pdf` → `ocr_complete`（`manuals/solivagus-phase2-ocr-gpu.md`）。
+- 环境说明：`paddlepaddle-gpu` 须从 Paddle 官方索引安装（`known-issues/paddlepaddle-gpu-not-on-pypi.md`）；README 补充 Solivagus 快速开始。
