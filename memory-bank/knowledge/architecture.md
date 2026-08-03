@@ -55,16 +55,26 @@ Solivagus 是本地 CLI 文档处理系统，不是 Web 服务。运行时由 **
 
 状态以工作区级 SQLite 为权威事实源；每文档 artifact 目录保存 OCR/单元/分区/输出文件。Paradigma Memory-Bank 仅服务开发 Agent 记忆，不参与 PDF 处理运行时。
 
-目标目录：
+推荐目标目录：
 
 ```text
-src/solivagus/       # 业务应用（Phase 1 新建）
-src/paradigma/       # 模板保留的 Memory harness（不混入业务逻辑）
+src/solivagus/       # 业务应用（Phase 1+）
+src/paradigma/       # Memory harness（`pd` 入口保留）
 project-brief/       # MVP 与设计源材料（可提交）
-example/             # 本地样例 PDF/产物（整目录 gitignore，不入库）
-legacy/              # 冻结后的单脚本归档（Phase 0）
+example/             # 本地样例 PDF/产物（整目录 gitignore）
+legacy/              # 冻结单脚本归档
 requirements-gpu.txt # 已跑通 GPU/OCR 依赖钉选
 tests/
+```
+
+安装：
+
+```powershell
+uv pip install -e ".[dev]" --python python3.12
+# Windows example:
+# uv pip install -e ".[dev]" --python "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe"
+solivagus version
+pd version
 ```
 
 # Technology Stack

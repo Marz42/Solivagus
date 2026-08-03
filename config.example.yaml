@@ -1,0 +1,19 @@
+# Example Solivagus config profile (Phase 1+)
+# Copy values into your environment or load via future --config support.
+
+workspace: "."
+batch_dir: "D:/PDFS"
+
+provider:
+  name: openai-compatible
+  base_url: "https://api.deepseek.com"
+  model: deepseek-v4-flash
+  thinking: disabled
+  temperature: 0.1
+  timeout_seconds: 300
+
+translation:
+  target_language: "zh-CN"
+  chunk_chars: 12000
+  fallback_to_source: true
+  strict: false

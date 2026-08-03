@@ -45,7 +45,7 @@ paradigma:
 | Path | Owner | Rules |
 |------|-------|-------|
 | `src/paradigma/` | Paradigma harness | 不实现 PDF 业务 |
-| `src/solivagus/`（计划） | Solivagus 业务 | CLI、OCR、翻译、QA、组装 |
+| `src/solivagus/` | Solivagus 业务 | CLI、OCR、翻译、QA、组装 |
 | `memory-bank/` | 开发记忆 | runtime/logs/knowledge 三态；不存 API Key 或用户 PDF |
 | `memory-bank-template/` | 空白模板 | 仅模板源 |
 | `project-brief/` | 设计与 MVP 源材料 | 可提交脚本/方案；不含密钥 |
@@ -75,7 +75,7 @@ paradigma:
 
 # Compatibility Notes
 
-- 当前仓库仍含 Paradigma 模板包；业务包 `src/solivagus` 在 Phase 1 创建。
+- 仓库以 `solivagus` 为发行包名（`pyproject.toml`），同时安装 `src/paradigma` 与 `pd` 入口。
 - MVP `*.translation/` 与草案 `.pdf2zh/` 仅作迁移输入；正式根为 `.solivagus/`。
 - `docs/rfc/` 保留 Paradigma OKF RFC，不充当产品规格。
 

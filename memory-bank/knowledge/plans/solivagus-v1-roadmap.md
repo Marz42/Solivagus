@@ -100,10 +100,10 @@ batch_default_dir: "D:\\PDFS"
 ## Phase 1 — 项目骨架和 SQLite
 
 - [x] 确认包名/CLI 名 = `solivagus`（ADR-001）
-- [ ] 用 uv 创建业务包 `src/solivagus/` + Typer CLI + 配置加载 + `.env.example`
-- [ ] SQLite schema + `.solivagus/` artifact 约定
-- [ ] 迁入单脚本通用函数；旧 `*.translation/` 导入工具
-- [ ] 验收：`solivagus status` / `inspect` / `run --stage translate` 基于 SQLite
+- [x] 用 uv/pip 创建业务包 `src/solivagus/` + Typer CLI + 配置加载 + `.env.example` / `config.example.yaml`
+- [x] SQLite schema（`.solivagus/state.db`）+ artifact 约定
+- [x] 迁入 MVP 通用函数（protect/split/assemble/provider）；`solivagus import-mvp` 导入旧 `*.translation/`
+- [x] 验收：`solivagus status` / `inspect` / `run --stage translate` 基于 SQLite（OCR 阶段留 Phase 2）
 
 ## Phase 2 — 无人值守 OCR
 
@@ -142,4 +142,4 @@ batch_default_dir: "D:\\PDFS"
 
 **in-progress**
 
-Phase 0 核心交付已完成；可选 OCR 人工抽查后即可进入 **Phase 1**（uv + `src/solivagus` 骨架）。
+Phase 1 骨架已完成。下一会话进入 **Phase 2**（无人值守 OCR：子进程、页面批次 checkpoint）。

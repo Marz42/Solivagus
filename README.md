@@ -2,7 +2,19 @@
 
 *本地技术文献智能翻译 CLI — PaddleOCR-VL + DeepSeek*
 
-当前版本：`0.7.0`
+当前应用版本：`0.1.0`（Memory harness / Paradigma：见根目录 `VERSION`）
+
+```powershell
+uv pip install -e ".[dev]" --python python3.12
+solivagus status
+solivagus import-mvp example\Qwen3_TTS.translation --pdf example\Qwen3_TTS.pdf
+solivagus run example\Qwen3_TTS.pdf --stage translate
+```
+
+---
+
+以下为随仓库保留的 Paradigma Agent Memory Runtime 说明（`pd` 工具链）。
+
 
 ## 核心理念
 

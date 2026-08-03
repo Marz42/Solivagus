@@ -1,0 +1,107 @@
+coding_runtime_schema_version: '0.1'
+kind: coding_checkpoint
+snapshot_revision: 1
+checkpoint:
+  checkpoint_id: CHECKPOINT-20260803-P1
+  task_id: TASK-20260803-P1
+  session_id: SESSION-20260803-P1
+  created_at: '2026-08-03T17:45:31.104509+08:00'
+  task_status: active
+  git:
+    repository_id: REPO-SOLIVAGUS
+    observed_at: '2026-08-03T17:45:31.104509+08:00'
+    head_commit: b8d0db7b46f546a9030309739f39a016b944bd9a
+    branch: main
+    dirty: true
+    worktree_paths:
+    - .env.example
+    - README.md
+    - memory-bank/knowledge/architecture.md
+    - memory-bank/knowledge/contracts/repository-contract.md
+    - memory-bank/knowledge/plans/solivagus-v1-roadmap.md
+    - memory-bank/logs/changelog.md
+    - memory-bank/runtime/active-session.yaml
+    - memory-bank/runtime/active-task.md
+    - memory-bank/runtime/active-task.yaml
+    - memory-bank/runtime/context-manifest.yaml
+    - memory-bank/runtime/handoff.md
+    - pyproject.toml
+    - config.example.yaml
+    - memory-bank/runtime/sessions/SESSION-20260803-P1.yaml
+    - memory-bank/runtime/tasks/TASK-20260803-P1.yaml
+    - src/solivagus/__init__.py
+    - src/solivagus/__main__.py
+    - src/solivagus/artifacts.py
+    - src/solivagus/assembly.py
+    - src/solivagus/cli.py
+    - src/solivagus/config.py
+    - src/solivagus/database.py
+    - src/solivagus/migrate/__init__.py
+    - src/solivagus/migrate/mvp.py
+    - src/solivagus/models.py
+    - src/solivagus/pipeline/__init__.py
+    - src/solivagus/pipeline/translate.py
+    - src/solivagus/providers/__init__.py
+    - src/solivagus/providers/openai_compatible.py
+    - src/solivagus/py.typed
+    - src/solivagus/schema.sql
+    - src/solivagus/util/__init__.py
+    - src/solivagus/util/markdown.py
+    - src/solivagus/util/text.py
+    - src/solivagus/workspace.py
+    - tests/unit/test_solivagus_phase1.py
+  tests:
+  - command: python -m unittest tests.unit.test_solivagus_phase1 -v
+    status: passed
+    observed_at: '2026-08-03T17:45:31.104509+08:00'
+    exit_code: 0
+    passed_count: null
+    failed_count: null
+    skipped_count: null
+    duration_seconds: 0.7660000000032596
+    report_path: null
+    output_hash: sha256:ad3fd3bf8011e68f2cd6a102356713223653b51556ca2ad98e0366fc50eb19c4
+  builds: []
+  touched_paths:
+  - .env.example
+  - README.md
+  - memory-bank/knowledge/architecture.md
+  - memory-bank/knowledge/contracts/repository-contract.md
+  - memory-bank/knowledge/plans/solivagus-v1-roadmap.md
+  - memory-bank/logs/changelog.md
+  - memory-bank/runtime/active-session.yaml
+  - memory-bank/runtime/active-task.md
+  - memory-bank/runtime/active-task.yaml
+  - memory-bank/runtime/context-manifest.yaml
+  - memory-bank/runtime/handoff.md
+  - pyproject.toml
+  - config.example.yaml
+  - memory-bank/runtime/sessions/SESSION-20260803-P1.yaml
+  - memory-bank/runtime/tasks/TASK-20260803-P1.yaml
+  - src/solivagus/__init__.py
+  - src/solivagus/__main__.py
+  - src/solivagus/artifacts.py
+  - src/solivagus/assembly.py
+  - src/solivagus/cli.py
+  - src/solivagus/config.py
+  - src/solivagus/database.py
+  - src/solivagus/migrate/__init__.py
+  - src/solivagus/migrate/mvp.py
+  - src/solivagus/models.py
+  - src/solivagus/pipeline/__init__.py
+  - src/solivagus/pipeline/translate.py
+  - src/solivagus/providers/__init__.py
+  - src/solivagus/providers/openai_compatible.py
+  - src/solivagus/py.typed
+  - src/solivagus/schema.sql
+  - src/solivagus/util/__init__.py
+  - src/solivagus/util/markdown.py
+  - src/solivagus/util/text.py
+  - src/solivagus/workspace.py
+  - tests/unit/test_solivagus_phase1.py
+  narrative:
+    summary: null
+    completed_work: []
+    remaining_work: []
+    blockers: []
+    next_steps: []

@@ -18,3 +18,4 @@
 - 提交 `requirements-gpu.txt`（已跑通 GPU/OCR 钉选）；整目录忽略 `example/`。
 - 加固 `.gitignore`（`.env`、`.solivagus/`、`example/`、PDF）并添加 `.env.example`。
 - Phase 0：归档 `legacy/pdf_translate_cli_v0_2.py`，新增 MVP baseline manual 与 `tests/characterization/test_mvp_baseline.py`。
+- Phase 1：新增 `src/solivagus`（Typer CLI + SQLite + MVP 导入 + translate stage），`config.example.yaml`，发行包名改为 `solivagus` 并保留 `pd` 入口。
