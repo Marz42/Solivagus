@@ -132,12 +132,12 @@ PDF
 
 # Open Questions
 
-- Characterization 夹具是否只引用本机 `example/` 路径（推荐），还是另建私有绝对路径配置？
+- Characterization 夹具以本机 `example/` 为准（见 `manuals/solivagus-mvp-baseline.md`）；不入库。
 - 正式 preflight 库最终选 PyMuPDF 还是沿用 MVP 的 pypdfium2？
 - DeepSeek 价格 profile 的更新频率与告警阈值？
-- 是否在 CLI 增加 `solivagus` 短别名以外的兼容命令？（首版不做）
+- 是否在 CLI 增加兼容短别名？（首版不做）
 
-已关闭：包/CLI 名 → `solivagus`（ADR-001）；Python → 3.11 基线 / 推荐 3.12 + uv；模型 → OAI-compatible 抽象 + 仅 `deepseek-v4-flash`；批目录惯例 → `D:\PDFS`；样例不入库 → `example/`。
+已关闭：包/CLI 名 → `solivagus`（ADR-001）；Python → 3.11 基线 / 推荐 3.12 + uv；模型 → OAI-compatible 抽象 + 仅 `deepseek-v4-flash`；批目录惯例 → `D:\PDFS`；样例不入库 → `example/`；MVP 归档 → `legacy/`。
 
 # Citations
 

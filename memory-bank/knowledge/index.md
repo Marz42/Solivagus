@@ -14,7 +14,7 @@ Agent 路由指南：先恢复 Task/Session 与 Context Manifest，再按任务�
 * [Contracts](contracts/) - CLI, workspace/artifact, repository contracts.
 * [Domains](domains/) - Document processing pipeline.
 * [Plans](plans/) - Solivagus v1 phased roadmap.
-* [Manuals](manuals/) - Operational guides (to be added).
+* [Manuals](manuals/) - MVP baseline characterization and future ops guides.
 
 ## COLD Knowledge
 

@@ -86,15 +86,16 @@ batch_default_dir: "D:\\PDFS"
 
 ## Phase 0 — 冻结 MVP 基线
 
-- [ ] 归档 `project-brief/pdf_translate_cli_v0_2.py` → `legacy/pdf_translate_cli_v0_2.py`
-- [ ] 以本机 `example/` 建立 characterization 清单（不入库）：
+- [x] 归档 `project-brief/pdf_translate_cli_v0_2.py` → `legacy/pdf_translate_cli_v0_2.py`
+- [x] 以本机 `example/` 建立 characterization 清单（不入库）：
   - `Attention Is All You Need.pdf`（+ 可选 html/md 对照；有段落/公式/表格，无双栏）
   - `Aerial Attack Study Boyd.pdf`（较差扫描）
   - `Vox Latina ...pdf`（尚可扫描）
   - `Qwen3_TTS.pdf` + `Qwen3_TTS.translation/`（已跑通基线）
-- [ ] 记录复现命令与期望产物路径（指向 example，git 外）
-- [ ] 建立基线测试骨架：表格不炸占位符、OCR-only 后续译、中断续跑、失败英文回退、组装成功
-- [ ] 验收：已跑通样本行为可复述/可对比
+- [x] 记录复现命令与期望产物路径（`manuals/solivagus-mvp-baseline.md`）
+- [x] 建立基线测试骨架：`tests/characterization/test_mvp_baseline.py`（表格 passthrough、占位符、分块、回退、组装；本机 F4 产物断言）
+- [x] 验收：无 GPU 测试通过；F4 SHA-256 与 `state.json` 对齐
+- [ ] （可选）本机对 F1 `--ocr-only` / F2·F3 OCR 质量抽查笔记
 
 ## Phase 1 — 项目骨架和 SQLite
 
@@ -141,4 +142,4 @@ batch_default_dir: "D:\\PDFS"
 
 **in-progress**
 
-知识库与命名决策已就绪；下一会话进入 **Phase 0**。
+Phase 0 核心交付已完成；可选 OCR 人工抽查后即可进入 **Phase 1**（uv + `src/solivagus` 骨架）。

@@ -1,67 +1,160 @@
 manifest_version: '0.1'
 profile: coding
 request:
-  intent: Fill Solivagus knowledge from project-brief for development readiness
-  task_id: TASK-20260803-KB-INIT
+  intent: Phase 0 MVP freeze characterization
+  task_id: TASK-20260803-P0
   explicit_paths:
-  - memory-bank/knowledge/project-brief.md
+  - memory-bank/knowledge/plans/solivagus-v1-roadmap.md
   - memory-bank/knowledge/architecture.md
-  - memory-bank/knowledge/contracts/repository-contract.md
-  - project-brief/project-brief.md
+  - project-brief/pdf_translate_cli_v0_2.py
   explicit_symbols: []
   keywords:
-  - Solivagus
-  - PDF
-  - DeepSeek
-  - PaddleOCR
-  - roadmap
+  - MVP
+  - characterization
+  - legacy
   budget_tokens: 12000
-session_id: SESSION-20260803-KB-INIT
+session_id: SESSION-20260803-P0
 checkpoint_id: null
-source_digest: sha256:49ac9caa5de6e42baeeec8b4f662233d41766bfc90a1d7f55f959a6ca8e1ca93
-estimated_tokens: 1839
+source_digest: sha256:d8a65347b88027c182cefffb8a89f0badbb018b4d16769ceb19787593abc3fd3
+estimated_tokens: 10030
 documents:
 - document_id: memory-bank/knowledge/architecture.md
   path: memory-bank/knowledge/architecture.md
   source_kind: knowledge
   title: System Architecture
   priority: required
-  estimated_tokens: 130
+  estimated_tokens: 1729
   reasons:
   - mandatory_hot_document
   - path_match:memory-bank/knowledge/architecture.md
+  - keyword_match:MVP
+  - keyword_match:characterization
+  - keyword_match:legacy
+  - relation_from:docs/rfc/paradigma-okf-compatible-runtime.md:informs
+  - relation_from:memory-bank/knowledge/contracts/cli-contract.md:depends_on
+  - relation_from:memory-bank/knowledge/contracts/repository-contract.md:informed_by
+  - relation_from:memory-bank/knowledge/contracts/workspace-artifact-contract.md:depends_on
+  - relation_from:memory-bank/knowledge/conventions.md:informed_by
+  - relation_from:memory-bank/knowledge/decisions/adr-001-package-name-solivagus.md:informs
+  - relation_from:memory-bank/knowledge/glossary.md:related_to
+  - relation_from:memory-bank/knowledge/plans/solivagus-v1-roadmap.md:informed_by
   - relation_from:memory-bank/knowledge/project-brief.md:informs
 - document_id: memory-bank/knowledge/contracts/repository-contract.md
   path: memory-bank/knowledge/contracts/repository-contract.md
   source_kind: knowledge
   title: Repository Contract
   priority: required
-  estimated_tokens: 132
+  estimated_tokens: 812
   reasons:
   - mandatory_hot_document
-  - path_match:memory-bank/knowledge/contracts/repository-contract.md
+  - keyword_match:MVP
+  - keyword_match:characterization
+  - keyword_match:legacy
+  - relation_from:docs/rfc/paradigma-okf-compatible-runtime.md:informs
+  - relation_from:memory-bank/knowledge/architecture.md:constrains
+  - relation_from:memory-bank/knowledge/conventions.md:constrains
+  - relation_from:memory-bank/knowledge/decisions/adr-001-package-name-solivagus.md:informs
   - relation_from:memory-bank/knowledge/project-brief.md:informs
 - document_id: memory-bank/knowledge/conventions.md
   path: memory-bank/knowledge/conventions.md
   source_kind: knowledge
   title: Coding and Collaboration Conventions
   priority: required
-  estimated_tokens: 144
+  estimated_tokens: 1045
   reasons:
   - mandatory_hot_document
+  - keyword_match:MVP
+  - keyword_match:characterization
 - document_id: memory-bank/knowledge/project-brief.md
   path: memory-bank/knowledge/project-brief.md
   source_kind: knowledge
   title: Project Brief
   priority: required
-  estimated_tokens: 1433
+  estimated_tokens: 1575
   reasons:
   - mandatory_hot_document
-  - path_match:memory-bank/knowledge/project-brief.md
-  - keyword_match:DeepSeek
-  - keyword_match:PDF
-  - keyword_match:PaddleOCR
-  - keyword_match:Solivagus
-excluded: []
+  - keyword_match:MVP
+  - relation_from:memory-bank/knowledge/architecture.md:informed_by
+  - relation_from:memory-bank/knowledge/contracts/cli-contract.md:informed_by
+  - relation_from:memory-bank/knowledge/contracts/workspace-artifact-contract.md:informed_by
+  - relation_from:memory-bank/knowledge/conventions.md:informed_by
+  - relation_from:memory-bank/knowledge/decisions/adr-001-package-name-solivagus.md:related_to
+  - relation_from:memory-bank/knowledge/glossary.md:related_to
+  - relation_from:memory-bank/knowledge/plans/solivagus-v1-roadmap.md:informed_by
+- document_id: memory-bank/knowledge/plans/solivagus-v1-roadmap.md
+  path: memory-bank/knowledge/plans/solivagus-v1-roadmap.md
+  source_kind: knowledge
+  title: Solivagus v1 Roadmap
+  priority: required
+  estimated_tokens: 1151
+  reasons:
+  - path_match:memory-bank/knowledge/plans/solivagus-v1-roadmap.md
+  - keyword_match:MVP
+  - keyword_match:characterization
+  - keyword_match:legacy
+  - relation_from:memory-bank/knowledge/architecture.md:informs
+  - relation_from:memory-bank/knowledge/project-brief.md:informs
+- document_id: memory-bank/knowledge/contracts/cli-contract.md
+  path: memory-bank/knowledge/contracts/cli-contract.md
+  source_kind: knowledge
+  title: CLI Contract
+  priority: relevant
+  estimated_tokens: 862
+  reasons:
+  - keyword_match:MVP
+  - relation_from:memory-bank/knowledge/architecture.md:constrains
+  - relation_from:memory-bank/knowledge/contracts/repository-contract.md:related_to
+  - relation_from:memory-bank/knowledge/contracts/workspace-artifact-contract.md:related_to
+  - relation_from:memory-bank/knowledge/decisions/adr-001-package-name-solivagus.md:informs
+- document_id: memory-bank/knowledge/contracts/workspace-artifact-contract.md
+  path: memory-bank/knowledge/contracts/workspace-artifact-contract.md
+  source_kind: knowledge
+  title: Workspace and Artifact Contract
+  priority: relevant
+  estimated_tokens: 809
+  reasons:
+  - keyword_match:MVP
+  - relation_from:memory-bank/knowledge/architecture.md:constrains
+  - relation_from:memory-bank/knowledge/contracts/cli-contract.md:depends_on
+  - relation_from:memory-bank/knowledge/contracts/repository-contract.md:related_to
+- document_id: memory-bank/knowledge/decisions/adr-001-package-name-solivagus.md
+  path: memory-bank/knowledge/decisions/adr-001-package-name-solivagus.md
+  source_kind: knowledge
+  title: ADR-001 Adopt solivagus as package and CLI name
+  priority: relevant
+  estimated_tokens: 568
+  reasons:
+  - keyword_match:MVP
+  - relation_from:memory-bank/knowledge/architecture.md:informed_by
+  - relation_from:memory-bank/knowledge/contracts/cli-contract.md:depends_on
+  - relation_from:memory-bank/knowledge/contracts/repository-contract.md:informed_by
+  - relation_from:memory-bank/knowledge/contracts/workspace-artifact-contract.md:depends_on
+  - relation_from:memory-bank/knowledge/conventions.md:informed_by
+  - relation_from:memory-bank/knowledge/glossary.md:related_to
+  - relation_from:memory-bank/knowledge/plans/solivagus-v1-roadmap.md:informed_by
+  - relation_from:memory-bank/knowledge/project-brief.md:related_to
+- document_id: memory-bank/knowledge/glossary.md
+  path: memory-bank/knowledge/glossary.md
+  source_kind: knowledge
+  title: Project Glossary
+  priority: relevant
+  estimated_tokens: 753
+  reasons:
+  - keyword_match:MVP
+  - keyword_match:characterization
+- document_id: memory-bank/knowledge/domains/document-pipeline.md
+  path: memory-bank/knowledge/domains/document-pipeline.md
+  source_kind: knowledge
+  title: Document Processing Pipeline
+  priority: related
+  estimated_tokens: 726
+  reasons:
+  - relation_from:memory-bank/knowledge/architecture.md:informs
+  - relation_from:memory-bank/knowledge/plans/solivagus-v1-roadmap.md:related_to
+excluded:
+- document_id: docs/rfc/paradigma-okf-compatible-runtime.md
+  path: docs/rfc/paradigma-okf-compatible-runtime.md
+  reason: budget_trimmed
+  estimated_tokens: 11493
 warnings: []
-checksum: sha256:e635768e77cc57fcf6f92ebe794fb03b22d9c8a195562d5592a921aeeb0c4858
+checksum: sha256:5aec20af040f38614e0171fb66787e742f5b992b5032dd37eea0b3da0f7f1ccf

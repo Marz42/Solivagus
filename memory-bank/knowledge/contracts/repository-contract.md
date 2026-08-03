@@ -51,7 +51,7 @@ paradigma:
 | `project-brief/` | 设计与 MVP 源材料 | 可提交脚本/方案；不含密钥 |
 | `example/` | 本机样例 | **整目录禁止提交**（PDF/HTML/MD/译文/私有依赖副本） |
 | `requirements-gpu.txt` | 已跑通 GPU/OCR 钉选 | 可提交；来源于本机验证环境 |
-| `legacy/`（计划） | 冻结 MVP 脚本 | Phase 0 归档 |
+| `legacy/` | 冻结 MVP 脚本 | `pdf_translate_cli_v0_2.py` 为 characterization 权威入口 |
 | `tests/` | 测试 | 默认不调用真实付费 API |
 | `.paradigma/` | harness 配置与可重建 cache | `cache/` 不入库 |
 | `.env` / `.env.*` | 本地密钥 | **禁止提交**；提供 `.env.example` |
