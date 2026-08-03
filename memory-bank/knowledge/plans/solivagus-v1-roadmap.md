@@ -3,7 +3,7 @@ type: paradigma-plan
 title: Solivagus v1 Roadmap
 description: Phased roadmap from MVP freeze through unattended batch production for Solivagus.
 tags: [plan, roadmap, solivagus, v1]
-timestamp: 2026-08-03T21:40:00+08:00
+timestamp: 2026-08-03T22:00:00+08:00
 paradigma:
   schema_version: "0.1"
   temperature: warm
@@ -121,8 +121,9 @@ batch_default_dir: "D:\\PDFS"
 
 ## Phase 4 — Provider 与 KV Cache
 
-- [ ] OAI-compatible Provider；默认仅 `deepseek-v4-flash`；thinking disabled；warm-up/probe/本地缓存
-- [ ] 验收：cache hit 可观测；低命中降级；缓存失效不致失败
+- [x] OAI-compatible Provider；默认仅 `deepseek-v4-flash`；thinking disabled；warm-up/probe/本地缓存
+- [x] 验收：cache hit 可观测（`translation_attempts` + `usage-report.json`）；低命中降级；缓存损坏不致失败
+- [x] 分区路径：`pipeline/partition_runner.py` + `pipeline/warmup.py`；无 partition 时回退 legacy flat
 
 ## Phase 5 — 异步并发
 
@@ -146,4 +147,4 @@ batch_default_dir: "D:\\PDFS"
 
 **in-progress**
 
-Phase 0–3 完成。下一会话：**Phase 4**（OAI-compatible Provider + KV Cache warm-up/probe）。
+Phase 0–4 完成。下一会话：**Phase 5**（异步并发翻译）。

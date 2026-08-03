@@ -80,21 +80,31 @@ def call_chat_api(
     api_base: str,
     api_key: str | None,
     model: str,
-    system_prompt: str,
-    user_prompt: str,
+    system_prompt: str | None = None,
+    user_prompt: str | None = None,
+    messages: list[dict[str, Any]] | None = None,
+    user_id: str | None = None,
     temperature: float = 0.1,
     send_temperature: bool = True,
     timeout: int = 300,
     disable_thinking: bool = True,
 ) -> tuple[str, str | None, dict[str, Any]]:
     endpoint = build_chat_endpoint(api_base)
-    payload: dict[str, Any] = {
-        "model": model,
-        "messages": [
+    if messages is not None:
+        payload_messages = messages
+    else:
+        if system_prompt is None or user_prompt is None:
+            raise ProviderError("call_chat_api requires messages= or system_prompt+user_prompt")
+        payload_messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
-        ],
+        ]
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": payload_messages,
     }
+    if user_id:
+        payload["user"] = user_id
     if send_temperature:
         payload["temperature"] = temperature
     if disable_thinking:

@@ -9,6 +9,7 @@ from typing import Any
 from solivagus.config import Settings
 from solivagus.database import Database, utc_now
 from solivagus.models import DocumentStatus, UnitStatus
+from solivagus.providers.prompts import document_user_id
 from solivagus.planning.planner import PlanningConfig, plan_from_markdown, write_plan_artifacts
 from solivagus.util.text import sha256_text
 
@@ -103,6 +104,7 @@ def run_plan_stage(
     ]
     db.replace_structural_nodes(document_id, node_rows)
 
+    user_id = document_user_id(str(doc["source_sha256"]))
     partition_rows = [
         {
             "sequence_index": p.sequence_index,
@@ -110,7 +112,7 @@ def run_plan_stage(
             "context_tokens": 0,
             "unit_count": p.unit_count,
             "prefix_hash": None,
-            "user_id": None,
+            "user_id": user_id,
             "warmup_status": "pending",
             "expected_cache_tokens": p.source_tokens,
             "actual_probe_hit_tokens": None,

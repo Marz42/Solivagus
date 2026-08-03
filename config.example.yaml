@@ -30,3 +30,11 @@ planning:
     cache_miss_per_million: 1.00
     output_per_million: 2.00
     currency: CNY
+
+cache:
+  target_mode: repeat
+  prompt_version: translate-v1
+  probe_min_ratio: 0.70
+  warning_ratio: 0.50
+  settle_seconds: 0
+  enable_local_translation_cache: true

@@ -73,10 +73,12 @@ assets/
 ocr/batch-NNNN/{result.json,source.md,done.json,worker-config.json}
 units/                 # Phase 3：结构规划写入；OCR 阶段可能有临时字符种子
 partitions/pNN.json
+usage-report.json
 plan-report.json
 logs/
 ```
 
+翻译阶段会更新 `cache_partitions.actual_probe_hit_tokens` / `warmup_status`，并向 `translation_attempts` 写入 usage。
 ## SQLite tables（首版概念）
 
 `documents`、`ocr_batches`、`structural_nodes`、`translation_units`、`cache_partitions`、`translation_attempts`、`style_capsules`、`artifacts`。

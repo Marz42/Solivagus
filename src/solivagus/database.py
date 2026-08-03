@@ -319,6 +319,93 @@ class Database:
             (document_id,),
         )
 
+    def update_partition(
+        self,
+        partition_id: int,
+        *,
+        warmup_status: str | None = None,
+        prefix_hash: str | None = None,
+        user_id: str | None = None,
+        actual_probe_hit_tokens: int | None = None,
+        status: str | None = None,
+        expected_cache_tokens: int | None = None,
+    ) -> None:
+        self.execute(
+            """
+            UPDATE cache_partitions SET
+              warmup_status = COALESCE(?, warmup_status),
+              prefix_hash = COALESCE(?, prefix_hash),
+              user_id = COALESCE(?, user_id),
+              actual_probe_hit_tokens = COALESCE(?, actual_probe_hit_tokens),
+              status = COALESCE(?, status),
+              expected_cache_tokens = COALESCE(?, expected_cache_tokens)
+            WHERE id = ?
+            """,
+            (
+                warmup_status,
+                prefix_hash,
+                user_id,
+                actual_probe_hit_tokens,
+                status,
+                expected_cache_tokens,
+                partition_id,
+            ),
+        )
+
+    def insert_translation_attempt(
+        self,
+        unit_id: int,
+        attempt_number: int,
+        *,
+        request_hash: str | None = None,
+        usage: Any = None,
+        finish_reason: str | None = None,
+        http_status: int | None = None,
+        error_type: str | None = None,
+        error_message: str | None = None,
+        latency_ms: int | None = None,
+    ) -> None:
+        from solivagus.providers.usage import UsageRecord
+
+        record = usage if isinstance(usage, UsageRecord) else UsageRecord.from_api(usage or {})
+        now = utc_now()
+        self.execute(
+            """
+            INSERT INTO translation_attempts(
+              unit_id, attempt_number, request_hash, started_at, finished_at,
+              latency_ms, http_status, finish_reason, prompt_tokens,
+              cache_hit_tokens, cache_miss_tokens, completion_tokens,
+              error_type, error_message, raw_response_path
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+            """,
+            (
+                unit_id,
+                attempt_number,
+                request_hash,
+                now,
+                now,
+                latency_ms,
+                http_status if http_status is not None else record.http_status,
+                finish_reason,
+                record.prompt_tokens,
+                record.cache_hit_tokens,
+                record.cache_miss_tokens,
+                record.completion_tokens,
+                error_type,
+                error_message,
+            ),
+        )
+
+    def list_units_for_partition(self, partition_id: int) -> list[sqlite3.Row]:
+        return self.fetchall(
+            """
+            SELECT * FROM translation_units
+            WHERE partition_id = ?
+            ORDER BY sequence_index ASC, id ASC
+            """,
+            (partition_id,),
+        )
+
     def update_unit(
         self,
         unit_id: int,

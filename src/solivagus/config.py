@@ -53,6 +53,14 @@ class Settings(BaseSettings):
     price_cache_miss_per_million: float = 1.00
     price_output_per_million: float = 2.00
 
+    # Provider / KV cache (Phase 4)
+    prompt_version: str = "translate-v1"
+    target_mode: Literal["repeat", "id_only"] = "repeat"
+    cache_probe_min_ratio: float = 0.70
+    cache_warning_ratio: float = 0.50
+    cache_settle_seconds: float = 0.0
+    enable_local_translation_cache: bool = True
+
     # OCR
     ocr_pipeline_version: str = "v1.6"
     ocr_device: str | None = Field(default=None, validation_alias="SOLIVAGUS_OCR_DEVICE")
