@@ -1,0 +1,17 @@
+coding_runtime_schema_version: '0.1'
+kind: coding_task
+snapshot_revision: 2
+task:
+  task_id: TASK-20260724-B36-FINAL
+  repository:
+    workspace_id: workspace-1
+    repository_id: paradigma
+    repository_path: .
+    remote_url: null
+  title: Finalize Batch 3.6 runtime initialization
+  goal: Make runtime init truly no-write idempotent and record final verification.
+  status: completed
+  created_at: '2026-07-24T02:52:51.094397+08:00'
+  updated_at: '2026-07-24T02:53:50.050339+08:00'
+  status_reason: null
+  parent_task_id: null

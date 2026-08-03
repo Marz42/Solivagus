@@ -1,0 +1,112 @@
+coding_runtime_schema_version: '0.1'
+kind: coding_checkpoint
+snapshot_revision: 1
+checkpoint:
+  checkpoint_id: CHECKPOINT-20260724-B36-FINAL
+  task_id: TASK-20260724-B36-FINAL
+  session_id: SESSION-20260724-B36-FINAL
+  created_at: '2026-07-24T02:53:07.208419+08:00'
+  task_status: active
+  git:
+    repository_id: paradigma
+    observed_at: '2026-07-24T02:53:07.208419+08:00'
+    head_commit: b19c4834a463bbb78312e79919948e098b474797
+    branch: main
+    dirty: true
+    worktree_paths:
+    - .cursor/rules/memory-bank-protocol.mdc
+    - AGENT_RULES.md
+    - INIT_PROMPT.md
+    - README.md
+    - memory-bank/knowledge/architecture.md
+    - memory-bank/knowledge/contracts/coding-runtime-contract.md
+    - memory-bank/knowledge/contracts/index.md
+    - memory-bank/knowledge/contracts/repository-contract.md
+    - memory-bank/knowledge/decisions/index.md
+    - memory-bank/knowledge/domains/index.md
+    - memory-bank/knowledge/domains/plans.md
+    - memory-bank/knowledge/domains/protocol.md
+    - memory-bank/knowledge/known-issues/session-context-fragmentation.md
+    - memory-bank/knowledge/plans/pd-next-milestones.md
+    - memory-bank/logs/changelog.md
+    - memory-bank/runtime/active-session.yaml
+    - memory-bank/runtime/active-task.md
+    - memory-bank/runtime/active-task.yaml
+    - memory-bank/runtime/context-manifest.yaml
+    - memory-bank/runtime/handoff.md
+    - src/paradigma/application/runtime.py
+    - src/paradigma/cli/main.py
+    - src/paradigma/cli/output.py
+    - tests/failure_injection/test_coding_runtime_failures.py
+    - tests/integration/test_coding_runtime_store.py
+    - memory-bank/knowledge/contracts/agent-operation-protocol-contract.md
+    - memory-bank/knowledge/decisions/adr-021-cli-driven-human-authored-agent-protocol.md
+    - memory-bank/logs/progress/2026-07-24-phase3-agent-rules-contraction.md
+    - memory-bank/runtime/b36-final-checkpoint-input.yaml
+    - memory-bank/runtime/checkpoints/CHECKPOINT-20260724-B36.yaml
+    - memory-bank/runtime/sessions/SESSION-20260724-B36-FINAL.yaml
+    - memory-bank/runtime/sessions/SESSION-20260724-B36.yaml
+    - memory-bank/runtime/tasks/TASK-20260724-B36-FINAL.yaml
+    - memory-bank/runtime/tasks/TASK-20260724-B36.yaml
+    - tests/architecture/test_agent_protocol.py
+    - tests/golden/agent-operation-protocol.txt
+  tests:
+  - command: '"C:\Users\yujue\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
+      -m unittest discover -s tests -p test_*.py'
+    status: passed
+    observed_at: '2026-07-24T02:53:07.208419+08:00'
+    exit_code: 0
+    passed_count: null
+    failed_count: null
+    skipped_count: null
+    duration_seconds: 26.56300000000192
+    report_path: null
+    output_hash: sha256:25627bde1ce4ea310a5bc13620ad09de34a49251bd20bb96e9301e26c294362f
+  builds: []
+  touched_paths:
+  - .cursor/rules/memory-bank-protocol.mdc
+  - AGENT_RULES.md
+  - INIT_PROMPT.md
+  - README.md
+  - memory-bank/knowledge/architecture.md
+  - memory-bank/knowledge/contracts/coding-runtime-contract.md
+  - memory-bank/knowledge/contracts/index.md
+  - memory-bank/knowledge/contracts/repository-contract.md
+  - memory-bank/knowledge/decisions/index.md
+  - memory-bank/knowledge/domains/index.md
+  - memory-bank/knowledge/domains/plans.md
+  - memory-bank/knowledge/domains/protocol.md
+  - memory-bank/knowledge/known-issues/session-context-fragmentation.md
+  - memory-bank/knowledge/plans/pd-next-milestones.md
+  - memory-bank/logs/changelog.md
+  - memory-bank/runtime/active-session.yaml
+  - memory-bank/runtime/active-task.md
+  - memory-bank/runtime/active-task.yaml
+  - memory-bank/runtime/context-manifest.yaml
+  - memory-bank/runtime/handoff.md
+  - src/paradigma/application/runtime.py
+  - src/paradigma/cli/main.py
+  - src/paradigma/cli/output.py
+  - tests/failure_injection/test_coding_runtime_failures.py
+  - tests/integration/test_coding_runtime_store.py
+  - memory-bank/knowledge/contracts/agent-operation-protocol-contract.md
+  - memory-bank/knowledge/decisions/adr-021-cli-driven-human-authored-agent-protocol.md
+  - memory-bank/logs/progress/2026-07-24-phase3-agent-rules-contraction.md
+  - memory-bank/runtime/b36-final-checkpoint-input.yaml
+  - memory-bank/runtime/checkpoints/CHECKPOINT-20260724-B36.yaml
+  - memory-bank/runtime/sessions/SESSION-20260724-B36-FINAL.yaml
+  - memory-bank/runtime/sessions/SESSION-20260724-B36.yaml
+  - memory-bank/runtime/tasks/TASK-20260724-B36-FINAL.yaml
+  - memory-bank/runtime/tasks/TASK-20260724-B36.yaml
+  - tests/architecture/test_agent_protocol.py
+  - tests/golden/agent-operation-protocol.txt
+  narrative:
+    summary: Final Batch 3.6 verification after tightening runtime init idempotence.
+    completed_work:
+    - Prevented no-change runtime init writes and made dry-run report projection drift.
+    - Removed duplicate failure-test import and extended drift repair coverage.
+    - Passed targeted and full test suites.
+    remaining_work: []
+    blockers: []
+    next_steps:
+    - Prepare the v0.7.0 release gate.

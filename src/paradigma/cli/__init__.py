@@ -1,0 +1,2 @@
+"""Paradigma command-line adapter."""
+

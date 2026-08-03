@@ -1,0 +1,47 @@
+---
+description: CLI-driven Paradigma Coding runtime, deterministic Context Manifest, and minimal Memory-Bank operation discipline.
+alwaysApply: true
+---
+
+# Paradigma Memory-Bank Protocol
+
+> 本 adapter 同步自 `AGENT_RULES.md`。源协议优先；adapter 不复制状态机。
+
+## Facts and projections
+
+- Task/Session/Checkpoint YAML 是 Coding runtime facts。
+- `active-task.md`、`handoff.md`、`context-manifest.yaml` 是 generated projections。
+- `memory-bank/knowledge/` 与 `docs/rfc/` 是 OKF-compatible 长期知识。
+- `memory-bank/logs/` 是 append-first 审计记录，不是新 Session 的强制扫描源。
+
+不得直接编辑 runtime YAML、Checkpoint、generated projections、子目录 generated index 或 `.paradigma/cache/`。确定性操作只通过 `pd task/session/handoff/context/runtime/catalog/index/check`。Mutation 默认先 dry-run，确认后才 `--write`；不得用 legacy archive 脚本维护 YAML Task。
+
+## Bootstrap / Read
+
+1. `pd task status`；无 Task 时 dry-run 后 `pd task start ... --write`。
+2. `pd session status`；需要时 dry-run 后 `pd session start ... --write`。
+3. 把意图规划为 path/symbol/keyword/budget，执行 `pd context build ... --write` 和 `pd context verify`。
+4. 只读取 Context Manifest 选择的 documents/reasons；前端任务把 `DESIGN.md` 作为显式 path signal。
+5. 从 handoff + latest Checkpoint 恢复；只有历史审计/故障调查时才读 progress logs。
+
+## Plan / Execution
+
+- 写代码前说明目标、边界、验证和风险；API/schema/CLI/目录变更先读相关 contract/ADR。
+- `requires-human-confirmation` 的长期知识变更先征求授权。
+- 长期事实写 knowledge；运行事实交给 CLI。不要在 generated active-task 中维护 checklist。
+- 阻塞/暂停/恢复使用 `pd task block/suspend/unblock/resume`。
+- 可恢复边界使用 `pd session checkpoint`；test/build command 只在显式 `--write` 下执行。
+- 只修改任务范围，保留用户既有改动。
+
+## Update / Handoff
+
+1. 更新受影响的 knowledge/ADR/contract/known issue/changelog；timestamp 从系统获取。
+2. metadata 变化后 `pd index rebuild` + `pd index verify`。
+3. 运行范围测试、`pd check`，并按需 `pd runtime verify` / `pd catalog verify`。
+4. source 变化后重建并 verify Context Manifest。
+5. 最终 `pd session checkpoint`，随后 `pd session end --write`。
+6. 完成时在 Session end 后 `pd task complete --write`；否则保持 active 或明确 block/suspend。
+7. progress log 仅在 Batch/版本/人工审计需要时 append，不承担运行恢复。
+8. 向用户报告成果、门禁、Task/Session、Memory-Bank 变更和风险。
+
+不确定时扩充 ContextRequest 并重建，不凭文件名、旧日志或模型记忆猜测。Generated drift 用 verify/rebuild 修复；首期协议文件仍人工同步，不自动生成。

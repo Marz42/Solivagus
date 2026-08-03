@@ -1,0 +1,33 @@
+manifest_version: '0.1'
+profile: coding
+request:
+  intent: Implement Context Builder
+  task_id: TASK-001
+  explicit_paths:
+  - src/paradigma
+  explicit_symbols:
+  - ContextRequest
+  keywords:
+  - manifest
+  budget_tokens: 12000
+session_id: SESSION-001
+checkpoint_id: CHECKPOINT-001
+source_digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+estimated_tokens: 321
+documents:
+- document_id: memory-bank/knowledge/architecture.md
+  path: memory-bank/knowledge/architecture.md
+  source_kind: knowledge
+  title: System Architecture
+  priority: required
+  estimated_tokens: 321
+  reasons:
+  - mandatory_hot_document
+  - symbol_match:ContextRequest
+excluded:
+- document_id: MEM-01ARZ3NDEKTSV4RRFFQ69G5FAV
+  path: memory-bank/memories/MEM-01ARZ3NDEKTSV4RRFFQ69G5FAV.md
+  reason: budget_trimmed
+  estimated_tokens: 900
+warnings: []
+checksum: sha256:741942d4d43df1ef183919542f6fe23e0b9a7354e8d1e2fb319c2197c399c7b2

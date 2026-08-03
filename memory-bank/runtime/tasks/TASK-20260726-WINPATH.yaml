@@ -1,0 +1,18 @@
+coding_runtime_schema_version: '0.1'
+kind: coding_task
+snapshot_revision: 2
+task:
+  task_id: TASK-20260726-WINPATH
+  repository:
+    workspace_id: workspace-1
+    repository_id: paradigma
+    repository_path: .
+    remote_url: null
+  title: Fix Windows path identity CI assertions
+  goal: Make Windows CI path assertions robust to 8.3 short-name expansion while preserving canonical
+    path safety.
+  status: completed
+  created_at: '2026-07-26T20:57:59.400966+08:00'
+  updated_at: '2026-07-26T21:01:21.248152+08:00'
+  status_reason: null
+  parent_task_id: null

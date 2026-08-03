@@ -1,0 +1,22 @@
+config_schema_version: "0.4"
+okf_version: "0.1"
+installed_distribution_version: "0.7.0"
+
+knowledge_roots:
+  - memory-bank/knowledge
+  - docs/rfc
+
+reserved_filenames:
+  - index.md
+  - log.md
+
+generated_markers:
+  begin: "<!-- BEGIN PARADIGMA AUTO-INDEX -->"
+  end: "<!-- END PARADIGMA AUTO-INDEX -->"
+
+runtime_root: memory-bank/runtime
+logs_root: memory-bank/logs
+template_root: memory-bank-template
+machine_index_path: .paradigma/cache/knowledge-index.json
+memory_root: memory-bank/memories
+catalog_path: .paradigma/cache/catalog.sqlite3

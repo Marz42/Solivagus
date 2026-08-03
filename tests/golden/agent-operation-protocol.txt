@@ -1,0 +1,10 @@
+pd task status
+pd session status
+pd context build
+pd context verify
+pd session checkpoint
+pd session end
+pd task complete
+pd runtime verify
+pd index rebuild
+pd check

@@ -1,0 +1,166 @@
+document_schema_version: "0.2"
+description: Paradigma semantic type registry for OKF-compatible concept documents.
+
+allowed_update_policies:
+  - agent-editable
+  - requires-human-confirmation
+  - append-only
+  - generated
+  - read-only
+
+allowed_epistemic_statuses:
+  - confirmed
+  - decision
+  - proposal
+  - assumption
+  - deprecated
+  - unknown
+
+allowed_temperatures:
+  - hot
+  - warm
+  - cold
+
+allowed_lifecycles:
+  - stable
+  - evolving
+  - append-only
+  - ephemeral
+  - generated
+  - proposal
+
+required_frontmatter:
+  - type
+  - title
+  - description
+  - tags
+  - timestamp
+
+required_paradigma_fields:
+  - schema_version
+  - temperature
+  - lifecycle
+  - update_policy
+  - epistemic_status
+
+generated_blocks:
+  required_markers:
+    - "<!-- BEGIN PARADIGMA AUTO-INDEX -->"
+    - "<!-- END PARADIGMA AUTO-INDEX -->"
+  checksum_prefix: "<!-- checksum:"
+
+types:
+  paradigma-project-brief:
+    layer: knowledge
+    default_temperature: hot
+    required_sections:
+      - Vision
+      - Target Users
+      - Scope
+      - Non-goals
+      - Success Criteria
+      - Constraints
+  paradigma-architecture:
+    layer: knowledge
+    default_temperature: hot
+    required_sections:
+      - Overview
+      - Technology Stack
+      - Module Boundaries
+      - Data Flow
+      - Key Constraints
+      - Open Questions
+      - Citations
+  paradigma-convention:
+    layer: knowledge
+    default_temperature: hot
+    required_sections:
+      - Naming
+      - Code Style
+      - Error Handling
+      - Testing Conventions
+      - Documentation Conventions
+      - Prohibited Patterns
+  paradigma-contract:
+    layer: knowledge
+    default_temperature: hot
+    required_sections:
+      - Scope
+      - Contract
+      - Request Schema
+      - Response Schema
+      - State Transitions
+      - Compatibility Notes
+      - Breaking Change Policy
+      - Citations
+  paradigma-domain:
+    layer: knowledge
+    default_temperature: warm
+    required_sections:
+      - Responsibility
+      - Public Interfaces
+      - Internal Flow
+      - Dependencies
+      - Related Contracts
+      - Known Risks
+  paradigma-manual:
+    layer: knowledge
+    default_temperature: cold
+    required_sections:
+      - Purpose
+      - Preconditions
+      - Steps
+      - Verification
+      - Rollback
+      - Troubleshooting
+      - Citations
+  paradigma-decision:
+    layer: knowledge
+    default_temperature: cold
+    required_sections:
+      - Context
+      - Decision
+      - Consequences
+      - Alternatives Considered
+      - Status
+      - Related Documents
+  paradigma-known-issue:
+    layer: knowledge
+    default_temperature: cold
+    required_sections:
+      - Symptom
+      - Impact
+      - Root Cause
+      - Workaround
+      - Permanent Fix
+      - Related Documents
+      - Status
+  paradigma-glossary:
+    layer: knowledge
+    default_temperature: cold
+    required_sections:
+      - Terms
+      - Abbreviations
+      - Domain-specific Meanings
+  paradigma-rfc:
+    layer: docs
+    default_temperature: warm
+    required_sections:
+      - Citations
+  paradigma-design-system:
+    layer: knowledge
+    default_temperature: warm
+    required_sections:
+      - Responsibility
+      - Public Interfaces
+      - Dependencies
+      - Known Risks
+  paradigma-plan:
+    layer: knowledge
+    default_temperature: warm
+    required_sections:
+      - Goal
+      - Scope
+      - Approach
+      - Tasks
+      - Status

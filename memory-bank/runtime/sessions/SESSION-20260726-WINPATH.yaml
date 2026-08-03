@@ -1,0 +1,17 @@
+coding_runtime_schema_version: '0.1'
+kind: coding_session
+snapshot_revision: 3
+session:
+  session_id: SESSION-20260726-WINPATH
+  task_id: TASK-20260726-WINPATH
+  repository:
+    workspace_id: workspace-1
+    repository_id: paradigma
+    repository_path: .
+    remote_url: null
+  status: ended
+  started_at: '2026-07-26T20:58:06.787503+08:00'
+  updated_at: '2026-07-26T21:01:19.313007+08:00'
+  ended_at: '2026-07-26T21:01:19.313007+08:00'
+  agent_id: codex
+  current_checkpoint_id: CHECKPOINT-20260726-WINPATH

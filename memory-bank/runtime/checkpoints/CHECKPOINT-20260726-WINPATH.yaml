@@ -1,0 +1,67 @@
+coding_runtime_schema_version: '0.1'
+kind: coding_checkpoint
+snapshot_revision: 1
+checkpoint:
+  checkpoint_id: CHECKPOINT-20260726-WINPATH
+  task_id: TASK-20260726-WINPATH
+  session_id: SESSION-20260726-WINPATH
+  created_at: '2026-07-26T21:00:33.944870+08:00'
+  task_status: active
+  git:
+    repository_id: paradigma
+    observed_at: '2026-07-26T21:00:33.944870+08:00'
+    head_commit: 72da5891caa580303d90c5aa0f05d2bd8c998da5
+    branch: main
+    dirty: true
+    worktree_paths:
+    - memory-bank/logs/changelog.md
+    - memory-bank/logs/progress/index.md
+    - memory-bank/runtime/active-session.yaml
+    - memory-bank/runtime/active-task.md
+    - memory-bank/runtime/active-task.yaml
+    - memory-bank/runtime/context-manifest.yaml
+    - memory-bank/runtime/handoff.md
+    - tests/integration/test_markdown_store.py
+    - tests/unit/test_package_core.py
+    - memory-bank/logs/progress/2026-07-26-windows-path-identity-ci-fix.md
+    - memory-bank/runtime/sessions/SESSION-20260726-WINPATH.yaml
+    - memory-bank/runtime/tasks/TASK-20260726-WINPATH.yaml
+    - memory-bank/runtime/windows-path-checkpoint-input.yaml
+  tests:
+  - command: '"C:\Users\yujue\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
+      -m unittest discover -s tests -p test_*.py'
+    status: passed
+    observed_at: '2026-07-26T21:00:33.944870+08:00'
+    exit_code: 0
+    passed_count: null
+    failed_count: null
+    skipped_count: null
+    duration_seconds: 30.968999999997322
+    report_path: null
+    output_hash: sha256:8cf4f735f05c19ba7330d455cb2aaee3b3feeb30842a039253e2ce4649bdba2f
+  builds: []
+  touched_paths:
+  - memory-bank/logs/changelog.md
+  - memory-bank/logs/progress/index.md
+  - memory-bank/runtime/active-session.yaml
+  - memory-bank/runtime/active-task.md
+  - memory-bank/runtime/active-task.yaml
+  - memory-bank/runtime/context-manifest.yaml
+  - memory-bank/runtime/handoff.md
+  - tests/integration/test_markdown_store.py
+  - tests/unit/test_package_core.py
+  - memory-bank/logs/progress/2026-07-26-windows-path-identity-ci-fix.md
+  - memory-bank/runtime/sessions/SESSION-20260726-WINPATH.yaml
+  - memory-bank/runtime/tasks/TASK-20260726-WINPATH.yaml
+  - memory-bank/runtime/windows-path-checkpoint-input.yaml
+  narrative:
+    summary: Fixed GitHub Windows CI assertions for equivalent 8.3 and long path spellings.
+    completed_work:
+    - Preserved canonical production path resolution and confinement checks.
+    - Compared resolved path identities in Markdown store and legacy-config tests.
+    - Added changelog and progress records explaining the Windows-specific root cause.
+    remaining_work:
+    - Re-run remote Windows and POSIX CI.
+    blockers: []
+    next_steps:
+    - Continue with Phase 4 Batch 4.1 after CI passes.

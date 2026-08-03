@@ -1,0 +1,17 @@
+coding_runtime_schema_version: '0.1'
+kind: coding_task
+snapshot_revision: 2
+task:
+  task_id: TASK-20260724-V070
+  repository:
+    workspace_id: workspace-1
+    repository_id: paradigma
+    repository_path: .
+    remote_url: null
+  title: Prepare v0.7.0 release candidate
+  goal: Freeze Phase 3 as a reproducible v0.7.0 release candidate with migration and artifact gates.
+  status: completed
+  created_at: '2026-07-24T03:01:48.648338+08:00'
+  updated_at: '2026-07-26T15:43:54.853104+08:00'
+  status_reason: null
+  parent_task_id: null

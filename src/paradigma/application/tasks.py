@@ -1,0 +1,327 @@
+"""Strict, recoverable active-task archive service."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+import hashlib
+import json
+import re
+
+from ..atomic import atomic_create_text, atomic_replace_text
+from ..diagnostics import Diagnostic
+from ..errors import AtomicWriteFailure, ParadigmaError
+from ..parser import flatten_mapping, parse_markdown_text, read_utf8_text
+from ..task_state import (
+    TaskStateFailure,
+    TaskStatus,
+    extract_section,
+    parse_task_status,
+    task_identifier,
+)
+from .outcomes import CommandOutcome
+
+
+LAST_ARCHIVE_ID_PATTERN = re.compile(
+    r"^Last archive ID:\s*`?([0-9a-f]{64})`?\s*$", re.MULTILINE
+)
+
+
+class ArchiveFailure(ParadigmaError, RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class ArchivePaths:
+    repository_root: Path
+    active_task: Path
+    active_task_template: Path
+    progress_root: Path
+
+
+@dataclass(frozen=True)
+class ArchivePlan:
+    paths: ArchivePaths
+    task_id: str
+    status: TaskStatus
+    source_hash: str
+    archive_id: str
+    target: Path
+    archive_content: str
+    reset_content: str
+    create_archive: bool
+
+    def to_dict(self) -> dict[str, object]:
+        root = self.paths.repository_root
+        return {
+            "task_id": self.task_id,
+            "status": self.status.value,
+            "source_hash": self.source_hash,
+            "archive_id": self.archive_id,
+            "target": _display(root, self.target),
+            "active_task": _display(root, self.paths.active_task),
+            "create_archive": self.create_archive,
+        }
+
+
+def archive_paths(repository_root: Path) -> ArchivePaths:
+    root = repository_root.resolve()
+    return ArchivePaths(
+        repository_root=root,
+        active_task=root / "memory-bank" / "runtime" / "active-task.md",
+        active_task_template=(
+            root / "memory-bank-template" / "runtime" / "active-task.template.md"
+        ),
+        progress_root=root / "memory-bank" / "logs" / "progress",
+    )
+
+
+def _display(root: Path, path: Path) -> str:
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def _slugify(value: str) -> str:
+    value = value.strip().lower()
+    value = re.sub(r"[^a-z0-9\u4e00-\u9fff-]+", "-", value)
+    return value.strip("-") or "active-task"
+
+
+def _replace_section(text: str, heading: str, value: str) -> str:
+    pattern = re.compile(
+        rf"(^## {re.escape(heading)}\s*$)(.*?)(?=^## |\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    if not pattern.search(text):
+        raise ArchiveFailure(
+            f"active-task template is missing section `## {heading}`",
+            code="PD_ARCHIVE_TEMPLATE_ERROR",
+        )
+    return pattern.sub(
+        lambda match: f"{match.group(1)}\n\n{value.strip()}\n\n",
+        text,
+        count=1,
+    )
+
+
+def _parse_status(text: str) -> TaskStatus:
+    try:
+        return parse_task_status(text)
+    except TaskStateFailure as error:
+        raise ArchiveFailure(
+            str(error), code="PD_ARCHIVE_INVALID_STATUS"
+        ) from error
+
+
+def _last_archive_id(text: str) -> str | None:
+    match = LAST_ARCHIVE_ID_PATTERN.search(extract_section(text, "Notes"))
+    return match.group(1) if match else None
+
+
+def _is_archived_reset(text: str, status: TaskStatus) -> bool:
+    return (
+        status is TaskStatus.PENDING
+        and not task_identifier(text)
+        and _last_archive_id(text) is not None
+    )
+
+
+def _find_existing_archive(paths: ArchivePaths, archive_id: str) -> Path | None:
+    if not paths.progress_root.exists():
+        return None
+    marker = f'archive_id: "{archive_id}"'
+    for path in sorted(paths.progress_root.glob("*.md")):
+        text = read_utf8_text(path)
+        if marker not in text:
+            continue
+        parsed = parse_markdown_text(text, source=str(path))
+        metadata = flatten_mapping(parsed.metadata)
+        if metadata.get("paradigma.archive_id") == archive_id:
+            return path
+    return None
+
+
+def _available_archive_path(
+    paths: ArchivePaths, task_slug: str, current_time: datetime
+) -> Path:
+    base = paths.progress_root / f"{current_time:%Y-%m-%d}-{task_slug}.md"
+    if not base.exists():
+        return base
+    for index in range(2, 100):
+        candidate = paths.progress_root / f"{current_time:%Y-%m-%d}-{task_slug}-{index}.md"
+        if not candidate.exists():
+            return candidate
+    raise ArchiveFailure(
+        "could not find an available archive filename",
+        code="PD_ARCHIVE_TARGET_EXHAUSTED",
+        exit_code=3,
+    )
+
+
+def _render_archive(
+    active_text: str, task_id: str, archive_id: str, current_time: datetime
+) -> str:
+    title = json.dumps(f"Archived Active Task {task_id}", ensure_ascii=False)
+    return f'''---
+type: paradigma-progress-log
+title: {title}
+description: Archived active task generated by pd task archive.
+tags: [progress, archive, active-task]
+timestamp: {current_time.isoformat(timespec="seconds")}
+paradigma:
+  layer: logs
+  lifecycle: append-only
+  update_policy: append-only
+  source: memory-bank/runtime/active-task.md
+  archive_id: "{archive_id}"
+---
+
+# Archived Active Task
+
+Archived at: {current_time:%Y-%m-%d %H:%M}
+
+{active_text.strip()}
+'''
+
+
+def _render_reset(
+    paths: ArchivePaths,
+    template_text: str,
+    target: Path,
+    archive_id: str,
+    current_time: datetime,
+) -> str:
+    content = template_text.replace(
+        "YYYY-MM-DDTHH:mm:ssZ", current_time.isoformat(timespec="seconds")
+    )
+    content = _replace_section(content, "Current Status", TaskStatus.PENDING.value)
+    notes = (
+        f"Last archive: {_display(paths.repository_root, target)}\n"
+        f"Last archive ID: `{archive_id}`"
+    )
+    return _replace_section(content, "Notes", notes).rstrip() + "\n"
+
+
+def build_archive_plan(
+    repository_root: Path,
+    current_time: datetime,
+    *,
+    force: bool = False,
+) -> ArchivePlan:
+    paths = archive_paths(repository_root)
+    if not paths.active_task.exists():
+        raise ArchiveFailure(
+            f"missing {_display(paths.repository_root, paths.active_task)}",
+            code="PD_ARCHIVE_MISSING_ACTIVE_TASK",
+        )
+    active_text = read_utf8_text(paths.active_task)
+    status = _parse_status(active_text)
+    if status is not TaskStatus.COMPLETED and not force:
+        raise ArchiveFailure(
+            f"task status is {status.value!r}; only completed tasks can be archived",
+            code="PD_ARCHIVE_TASK_NOT_ARCHIVABLE",
+        )
+    identifier = task_identifier(active_text)
+    if not identifier:
+        raise ArchiveFailure(
+            "Task ID must be non-empty before archiving",
+            code="PD_ARCHIVE_MISSING_TASK_ID",
+        )
+    template_text = read_utf8_text(paths.active_task_template)
+    source_hash = hashlib.sha256(active_text.encode("utf-8")).hexdigest()
+    existing = _find_existing_archive(paths, source_hash)
+    target = existing or _available_archive_path(
+        paths, _slugify(identifier), current_time
+    )
+    archive_content = (
+        read_utf8_text(existing)
+        if existing is not None
+        else _render_archive(active_text, identifier, source_hash, current_time)
+    )
+    return ArchivePlan(
+        paths=paths,
+        task_id=identifier,
+        status=status,
+        source_hash=source_hash,
+        archive_id=source_hash,
+        target=target,
+        archive_content=archive_content,
+        reset_content=_render_reset(
+            paths, template_text, target, source_hash, current_time
+        ),
+        create_archive=existing is None,
+    )
+
+
+def execute_archive_plan(plan: ArchivePlan) -> None:
+    current_text = read_utf8_text(plan.paths.active_task)
+    current_hash = hashlib.sha256(current_text.encode("utf-8")).hexdigest()
+    if current_hash != plan.source_hash:
+        raise ArchiveFailure(
+            "active task changed after the mutation plan was generated",
+            code="PD_ARCHIVE_SOURCE_CHANGED",
+            exit_code=3,
+        )
+    try:
+        if plan.create_archive:
+            atomic_create_text(plan.target, plan.archive_content)
+        atomic_replace_text(plan.paths.active_task, plan.reset_content)
+    except FileExistsError as error:
+        raise ArchiveFailure(
+            f"archive target appeared while applying the plan: {plan.target}",
+            code="PD_ARCHIVE_TARGET_CONFLICT",
+            exit_code=3,
+        ) from error
+    except AtomicWriteFailure as error:
+        raise ArchiveFailure(
+            str(error), code="PD_ARCHIVE_IO_ERROR", exit_code=2
+        ) from error
+
+
+def archive_outcome(
+    repository_root: Path,
+    *,
+    dry_run: bool = True,
+    force: bool = False,
+    current_time: datetime | None = None,
+) -> CommandOutcome:
+    paths = archive_paths(repository_root)
+    yaml_pointer = paths.active_task.with_suffix(".yaml")
+    if yaml_pointer.exists():
+        raise ArchiveFailure(
+            "legacy Markdown archive is disabled after YAML runtime migration; use `pd task complete` or `pd task abort`",
+            code="PD_ARCHIVE_YAML_RUNTIME",
+            exit_code=3,
+        )
+    if paths.active_task.exists():
+        active_text = read_utf8_text(paths.active_task)
+        status = _parse_status(active_text)
+        if _is_archived_reset(active_text, status):
+            archive_id = _last_archive_id(active_text)
+            return CommandOutcome(
+                command="task archive",
+                data={"already_archived": True, "archive_id": archive_id},
+                messages=(f"Already archived: {archive_id}",),
+                dry_run=dry_run,
+            )
+    plan = build_archive_plan(
+        repository_root,
+        current_time or datetime.now().astimezone(),
+        force=force,
+    )
+    if not dry_run:
+        execute_archive_plan(plan)
+    return CommandOutcome(
+        command="task archive",
+        data={"already_archived": False, "plan": plan.to_dict()},
+        messages=(
+            "Archive mutation plan generated."
+            if dry_run
+            else "Active task archived and reset.",
+        ),
+        changed=not dry_run,
+        dry_run=dry_run,
+    )

@@ -1,0 +1,39 @@
+name: Paradigma Quality Gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install runtime dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Install Paradigma package
+        run: python -m pip install --no-deps .
+      - name: Rebuild derived machine index
+        run: pd index rebuild
+      - name: Rebuild derived memory catalog
+        run: pd catalog rebuild
+      - name: Verify tracked navigation indexes are current
+        run: git diff --exit-code -- memory-bank/knowledge docs/rfc
+      - name: Run characterization tests
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: Run Paradigma checks
+        run: pd check --dry-run
+      - name: Verify derived memory catalog
+        run: pd catalog verify
+      - name: Verify Coding YAML runtime projections
+        run: pd runtime verify
+      - name: Verify legacy compatibility entrypoint
+        run: python .paradigma/tools/pd-check-all.py --keep-going

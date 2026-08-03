@@ -1,0 +1,6 @@
+coding_runtime_schema_version: "0.1"
+kind: active_session
+updated_at: YYYY-MM-DDTHH:mm:ssZ
+session_id: null
+task_id: null
+last_session_id: null
