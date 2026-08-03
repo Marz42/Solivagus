@@ -172,23 +172,53 @@ def import_mvp_cmd(
 @app.command("run")
 def run_cmd(
     ctx: typer.Context,
-    pdf: Path = typer.Argument(..., help="Input PDF (must already be registered)"),
+    pdf: Path = typer.Argument(..., help="Input PDF"),
     stage: Stage = typer.Option(Stage.ALL, "--stage", help="Pipeline stage"),
+    force_ocr: bool = typer.Option(False, "--force-ocr"),
     force_translate: bool = typer.Option(False, "--force-translate"),
     strict: bool = typer.Option(False, "--strict"),
+    prevent_sleep: bool = typer.Option(False, "--prevent-sleep"),
+    device: Optional[str] = typer.Option(None, "--device", help="OCR device, e.g. gpu:0"),
 ) -> None:
-    """Run pipeline stages. Phase 1 supports --stage translate against SQLite units."""
+    """Run pipeline stages against SQLite-backed workspace state."""
+    from solivagus.ocr.checkpoints import OcrConfig
+    from solivagus.ocr.runner import OcrStageError, run_ocr_stage
+
     settings = ctx.obj["settings"]
-    if stage == Stage.OCR:
-        typer.echo("OCR stage is scheduled for Phase 2; use legacy script or import-mvp for now.")
-        raise typer.Exit(code=2)
-    if stage not in {Stage.ALL, Stage.TRANSLATE}:
-        raise typer.BadParameter(f"unsupported stage: {stage}")
+    pdf = pdf.expanduser().resolve()
+    if not pdf.is_file():
+        raise typer.BadParameter(f"PDF not found: {pdf}")
+
+    ocr_config = OcrConfig(
+        pipeline_version=settings.ocr_pipeline_version,
+        device=device or settings.ocr_device,
+        use_orientation=settings.ocr_use_orientation,
+        use_unwarping=settings.ocr_use_unwarping,
+        use_chart_recognition=settings.ocr_use_chart_recognition,
+        batch_pages=settings.ocr_batch_pages,
+    )
 
     with _open_db(settings.workspace) as db:
-        doc_id, _row = _resolve_document(db, pdf)
+        if stage in {Stage.ALL, Stage.OCR}:
+            try:
+                ocr_result = run_ocr_stage(
+                    db,
+                    pdf_path=pdf,
+                    workspace=settings.workspace,
+                    config=ocr_config,
+                    chunk_chars=settings.chunk_chars,
+                    force=force_ocr,
+                    prevent_sleep=prevent_sleep,
+                )
+            except OcrStageError as exc:
+                typer.secho(str(exc), fg=typer.colors.RED, err=True)
+                raise typer.Exit(code=2) from exc
+            typer.echo("ocr stage complete")
+            for key, value in ocr_result.items():
+                typer.echo(f"{key}: {value}")
+
         if stage in {Stage.ALL, Stage.TRANSLATE}:
-            # Phase 1: ALL means translate-only until OCR lands.
+            doc_id, _row = _resolve_document(db, pdf)
             result = run_translate_stage(
                 db,
                 document_id=doc_id,
@@ -196,9 +226,42 @@ def run_cmd(
                 force=force_translate,
                 strict=strict,
             )
-    typer.echo("translate stage complete")
-    for key, value in result.items():
-        typer.echo(f"{key}: {value}")
+            typer.echo("translate stage complete")
+            for key, value in result.items():
+                typer.echo(f"{key}: {value}")
+
+
+@app.command("report")
+def report_cmd(
+    ctx: typer.Context,
+    output_dir: Optional[Path] = typer.Option(
+        None, "--output-dir", help="Where to write nightly-*.md/json"
+    ),
+) -> None:
+    """Write a simple nightly summary from SQLite document rows."""
+    from solivagus.ocr.report import write_nightly_report
+
+    settings = ctx.obj["settings"]
+    out = (output_dir or (settings.workspace / ".solivagus" / "reports")).expanduser()
+    with _open_db(settings.workspace) as db:
+        rows = []
+        for doc in db.list_documents():
+            batches = db.fetchall(
+                "SELECT status FROM ocr_batches WHERE document_id = ?",
+                (int(doc["id"]),),
+            )
+            ok = sum(1 for item in batches if str(item["status"]).startswith("done") or item["status"] == "skipped_done")
+            rows.append(
+                {
+                    "display_name": doc["display_name"],
+                    "status": doc["status"],
+                    "ocr_batches_ok": ok,
+                    "failed_pages": None,
+                }
+            )
+        md_path, json_path = write_nightly_report(out, documents=rows)
+    typer.echo(f"wrote {md_path}")
+    typer.echo(f"wrote {json_path}")
 
 
 def main() -> None:

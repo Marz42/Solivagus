@@ -1,0 +1,73 @@
+coding_runtime_schema_version: '0.1'
+kind: coding_checkpoint
+snapshot_revision: 1
+checkpoint:
+  checkpoint_id: CHECKPOINT-20260803-P2
+  task_id: TASK-20260803-P2
+  session_id: SESSION-20260803-P2
+  created_at: '2026-08-03T18:00:50.067586+08:00'
+  task_status: active
+  git:
+    repository_id: REPO-SOLIVAGUS
+    observed_at: '2026-08-03T18:00:50.067586+08:00'
+    head_commit: 2740d6538553ebef09645b22312c39f9879dc2e4
+    branch: main
+    dirty: true
+    worktree_paths:
+    - memory-bank/knowledge/plans/solivagus-v1-roadmap.md
+    - memory-bank/logs/changelog.md
+    - memory-bank/runtime/active-session.yaml
+    - memory-bank/runtime/active-task.md
+    - memory-bank/runtime/active-task.yaml
+    - memory-bank/runtime/handoff.md
+    - src/solivagus/cli.py
+    - src/solivagus/config.py
+    - memory-bank/runtime/sessions/SESSION-20260803-P2.yaml
+    - memory-bank/runtime/tasks/TASK-20260803-P2.yaml
+    - src/solivagus/ocr/__init__.py
+    - src/solivagus/ocr/checkpoints.py
+    - src/solivagus/ocr/locks.py
+    - src/solivagus/ocr/preflight.py
+    - src/solivagus/ocr/report.py
+    - src/solivagus/ocr/runner.py
+    - src/solivagus/ocr/sleep.py
+    - src/solivagus/ocr/worker.py
+    - tests/unit/test_solivagus_ocr_phase2.py
+  tests:
+  - command: python -m unittest tests.unit.test_solivagus_ocr_phase2 -v
+    status: passed
+    observed_at: '2026-08-03T18:00:50.067586+08:00'
+    exit_code: 0
+    passed_count: null
+    failed_count: null
+    skipped_count: null
+    duration_seconds: 0.2970000000204891
+    report_path: null
+    output_hash: sha256:4790914897798365e18940cbc16c02fdee0c9448e7b97ae8ec169c6a1d1f262b
+  builds: []
+  touched_paths:
+  - memory-bank/knowledge/plans/solivagus-v1-roadmap.md
+  - memory-bank/logs/changelog.md
+  - memory-bank/runtime/active-session.yaml
+  - memory-bank/runtime/active-task.md
+  - memory-bank/runtime/active-task.yaml
+  - memory-bank/runtime/handoff.md
+  - src/solivagus/cli.py
+  - src/solivagus/config.py
+  - memory-bank/runtime/sessions/SESSION-20260803-P2.yaml
+  - memory-bank/runtime/tasks/TASK-20260803-P2.yaml
+  - src/solivagus/ocr/__init__.py
+  - src/solivagus/ocr/checkpoints.py
+  - src/solivagus/ocr/locks.py
+  - src/solivagus/ocr/preflight.py
+  - src/solivagus/ocr/report.py
+  - src/solivagus/ocr/runner.py
+  - src/solivagus/ocr/sleep.py
+  - src/solivagus/ocr/worker.py
+  - tests/unit/test_solivagus_ocr_phase2.py
+  narrative:
+    summary: null
+    completed_work: []
+    remaining_work: []
+    blockers: []
+    next_steps: []

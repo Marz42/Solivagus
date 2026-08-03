@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     send_temperature: bool = True
     thinking: Literal["disabled"] = "disabled"
 
+    # OCR
+    ocr_pipeline_version: str = "v1.6"
+    ocr_device: str | None = Field(default=None, validation_alias="SOLIVAGUS_OCR_DEVICE")
+    ocr_batch_pages: int = 8
+    ocr_use_orientation: bool = False
+    ocr_use_unwarping: bool = False
+    ocr_use_chart_recognition: bool = False
+
 
 @lru_cache(maxsize=4)
 def get_settings(env_file: str | None = None) -> Settings:

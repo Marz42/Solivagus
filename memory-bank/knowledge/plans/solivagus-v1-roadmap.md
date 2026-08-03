@@ -107,9 +107,9 @@ batch_default_dir: "D:\\PDFS"
 
 ## Phase 2 — 无人值守 OCR
 
-- [ ] OCR 独立子进程、预检、页面批次 checkpoint、失败拆分、锁、防睡眠、夜间报告
-- [ ] 验收：强杀后续跑；坏 PDF 不阻断批次；单页失败带警告完成
-
+- [x] OCR 独立子进程、预检、页面批次 checkpoint、失败拆分、锁、防睡眠、夜间报告
+- [x] 验收：单元测试覆盖强杀后续跑（done.json skip）、坏批次拆分、单页失败带警告继续
+- [ ] （可选本机 GPU）对 `example/*.pdf` 跑 `solivagus run --stage ocr` 实机验证
 ## Phase 3 — 结构树和 Token Planner
 
 - [ ] 结构解析、Unit/Partition、`plan` 与成本预估
@@ -142,4 +142,4 @@ batch_default_dir: "D:\\PDFS"
 
 **in-progress**
 
-Phase 1 骨架已完成。下一会话进入 **Phase 2**（无人值守 OCR：子进程、页面批次 checkpoint）。
+Phase 2 OCR 骨架已完成。下一会话进入 **Phase 3**（结构树 + Token Planner），或先做本机 GPU OCR 实跑。
