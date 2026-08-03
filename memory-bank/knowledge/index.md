@@ -1,4 +1,4 @@
-# Paradigma Knowledge Index
+# Solivagus Knowledge Index
 
 Agent 路由指南：先读取 runtime active task，再读取本 index，根据任务选择最相关的 1-3 个文档继续阅读。One-shot retrieval 是第一跳，不是终点。
 

@@ -1,6 +1,6 @@
-# Project Paradigma
+# Solivagus
 
-*OKF-compatible Agent Memory Runtime Framework*
+*本地技术文献智能翻译 CLI — PaddleOCR-VL + DeepSeek*
 
 当前版本：`0.7.0`
 
