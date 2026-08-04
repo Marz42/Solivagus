@@ -19,13 +19,14 @@ from solivagus.providers.openai_compatible import (
 )
 from solivagus.providers.prompts import document_user_id
 from solivagus.reporting.usage_report import empty_usage_totals, write_usage_report
+from solivagus.style.capsule import StyleCapsule, build_next_capsule, empty_capsule
 from solivagus.util.markdown import (
     make_untranslated_fallback,
     protect_markdown,
     restore_markdown,
     split_passthrough_segments,
 )
-from solivagus.util.text import atomic_write_text, sha256_text
+from solivagus.util.text import atomic_write_json, atomic_write_text, sha256_text
 from solivagus.workspace import translation_cache_root
 
 
@@ -281,6 +282,12 @@ def run_translate_stage(
     probe_summaries: list[dict[str, Any]] = []
     global_gate = ConcurrencyGate(settings.global_concurrency)
     document_gate = ConcurrencyGate(settings.per_document_concurrency)
+    latest_row = db.get_latest_style_capsule(document_id)
+    capsule: StyleCapsule = (
+        StyleCapsule.from_db_row(latest_row) if latest_row is not None else empty_capsule()
+    )
+    capsule_dir = artifact_dir / "style_capsules"
+    capsule_dir.mkdir(parents=True, exist_ok=True)
 
     units_by_partition: dict[int | None, list[Any]] = {}
     for unit in units:
@@ -309,6 +316,7 @@ def run_translate_stage(
                 usage_totals=usage_totals,
                 global_gate=global_gate,
                 document_gate=document_gate,
+                style_capsule=capsule,
             )
             translated_count += int(result["translated"])
             skipped += int(result["skipped"])
@@ -323,8 +331,47 @@ def run_translate_stage(
                     "probe_ratio": result["probe_ratio"],
                     "re_probed": result["re_probed"],
                     "partition_concurrency": result.get("partition_concurrency"),
+                    "style_capsule_version": result.get("style_capsule_version"),
+                    "rewarmed": result.get("rewarmed"),
                 }
             )
+            # Freeze next capsule at partition boundary for subsequent partitions.
+            next_capsule = build_next_capsule(
+                result.get("style_capsule") or capsule,
+                result["assembled"],
+            )
+            fields = next_capsule.to_db_fields()
+            db.insert_style_capsule(
+                document_id,
+                version=int(fields["version"]),
+                rules_json=str(fields["rules_json"]),
+                terminology_json=str(fields["terminology_json"]),
+                examples_json=str(fields["examples_json"]),
+                boundary_context_json=str(fields["boundary_context_json"]),
+                content_hash=str(fields["content_hash"]),
+                source_partition_id=part_id,
+            )
+            capsule_path = capsule_dir / f"v{next_capsule.version}.json"
+            atomic_write_json(
+                capsule_path,
+                {
+                    "version": next_capsule.version,
+                    "style_rules": next_capsule.style_rules,
+                    "terminology": next_capsule.terminology,
+                    "examples": next_capsule.examples,
+                    "boundary_context": next_capsule.boundary_context,
+                    "content_hash": next_capsule.content_hash(),
+                    "source_partition_id": part_id,
+                },
+            )
+            db.record_artifact(
+                document_id,
+                "style_capsule",
+                str(capsule_path),
+                next_capsule.content_hash(),
+            )
+            db.commit()
+            capsule = next_capsule
     except FatalProviderError:
         db.update_document_status(
             document_id,

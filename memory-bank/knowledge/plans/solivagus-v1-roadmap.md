@@ -3,7 +3,7 @@ type: paradigma-plan
 title: Solivagus v1 Roadmap
 description: Phased roadmap from MVP freeze through unattended batch production for Solivagus.
 tags: [plan, roadmap, solivagus, v1]
-timestamp: 2026-08-04T09:30:00+08:00
+timestamp: 2026-08-04T09:45:00+08:00
 paradigma:
   schema_version: "0.1"
   temperature: warm
@@ -133,7 +133,10 @@ batch_default_dir: "D:\\PDFS"
 
 ## Phase 6 — 风格胶囊
 
-- [ ] 分区冻结 capsule；跨区术语稳定
+- [x] 分区边界冻结 capsule；跨区术语/样例/边界上下文传递
+- [x] 第一分区 seed → provisional → 重建前缀并 re-warmup
+- [x] 本地缓存键包含 `style_capsule_hash`；单元记录 `style_capsule_version`
+- [x] 产物：`style_capsules/vN.json` + SQLite `style_capsules`
 
 ## Phase 7 — QA 与专用结构处理
 
@@ -148,4 +151,4 @@ batch_default_dir: "D:\\PDFS"
 
 **in-progress**
 
-Phase 0–5 完成。下一会话：**Phase 6**（风格胶囊）。
+Phase 0–6 完成。下一会话：**Phase 7**（机械 QA 与专用结构处理）。

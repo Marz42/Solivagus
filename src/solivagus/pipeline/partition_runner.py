@@ -33,6 +33,7 @@ from solivagus.providers.prompts import (
 )
 from solivagus.providers.usage import UsageRecord
 from solivagus.reporting.usage_report import add_usage
+from solivagus.style.capsule import StyleCapsule, empty_capsule, provisional_from_seed, select_seed_unit
 from solivagus.util.markdown import (
     make_untranslated_fallback,
     protect_markdown,
@@ -209,6 +210,7 @@ def translate_partition(
     usage_totals: dict[str, int] | None = None,
     global_gate: ConcurrencyGate | None = None,
     document_gate: ConcurrencyGate | None = None,
+    style_capsule: StyleCapsule | None = None,
 ) -> dict[str, Any]:
     return asyncio.run(
         translate_partition_async(
@@ -227,6 +229,7 @@ def translate_partition(
             usage_totals=usage_totals,
             global_gate=global_gate,
             document_gate=document_gate,
+            style_capsule=style_capsule,
         )
     )
 
@@ -248,6 +251,7 @@ async def translate_partition_async(
     usage_totals: dict[str, int] | None = None,
     global_gate: ConcurrencyGate | None = None,
     document_gate: ConcurrencyGate | None = None,
+    style_capsule: StyleCapsule | None = None,
 ) -> dict[str, Any]:
     del document_id
     units_dir = artifact_dir / "units"
@@ -260,17 +264,30 @@ async def translate_partition_async(
     document_gate = document_gate or ConcurrencyGate(cfg.per_document_limit)
     writer = DbWriter()
 
+    capsule = style_capsule or empty_capsule()
+    # Partition-1 bootstrap: translate a representative seed unit first.
+    if capsule.version == 0 and not capsule.provisional and units:
+        seed = select_seed_unit(units)
+        if seed is not None:
+            seed_key = str(seed["unit_key"])
+            units = [seed] + [u for u in units if str(u["unit_key"]) != seed_key]
+
     user_id = str(partition["user_id"] or document_user_id(source_sha256))
     expected = int(partition["expected_cache_tokens"] or partition["source_tokens"] or 0)
     unit_dicts = [
         {"unit_key": u["unit_key"], "source_text": u["source_text"]} for u in units
     ]
-    stable_system, stable_user, prefix_hash = build_stable_prefix(
-        document_title=document_title,
-        target_language=settings.target_language,
-        units=unit_dicts,
-        prompt_version=settings.prompt_version,
-    )
+
+    def _rebuild_prefix() -> tuple[str, str, str]:
+        return build_stable_prefix(
+            document_title=document_title,
+            target_language=settings.target_language,
+            units=unit_dicts,
+            style_capsule=capsule.to_prompt_text(),
+            prompt_version=settings.prompt_version,
+        )
+
+    stable_system, stable_user, prefix_hash = _rebuild_prefix()
 
     warmup = await asyncio.to_thread(
         run_partition_warmup,
@@ -282,6 +299,7 @@ async def translate_partition_async(
         user_id=user_id,
     )
     usage_totals["api_calls"] = usage_totals.get("api_calls", 0) + 1
+    rewarmed = False
 
     decision = ProbeDecision.FULL
     probe_hits = 0
@@ -321,6 +339,8 @@ async def translate_partition_async(
                 model=settings.llm_model,
                 attempt_count=attempt_no,
                 warning_flags=warn_flag,
+                prompt_version=settings.prompt_version,
+                style_capsule_version=capsule.version_label(),
             )
             if not from_cache:
                 usage_rec = UsageRecord.from_api(usage)
@@ -384,6 +404,7 @@ async def translate_partition_async(
         is_probe: bool = False,
     ) -> None:
         nonlocal decision, probe_hits, re_probed, barrier_done, partition_gate
+        nonlocal capsule, stable_system, stable_user, prefix_hash, warmup, rewarmed
         unit_key = str(unit["unit_key"])
         source_text = str(unit["source_text"])
         source_file = units_dir / f"{unit_key}.source.md"
@@ -396,16 +417,22 @@ async def translate_partition_async(
             model=settings.llm_model,
             prompt_version=settings.prompt_version,
             target_language=settings.target_language,
+            style_capsule_hash=capsule.content_hash(),
             translation_parameters=f"target_mode={settings.target_mode}",
         )
 
         async def _do_translate() -> tuple[str, dict[str, Any], bool]:
             nonlocal decision, probe_hits, re_probed, partition_gate, barrier_done
+            nonlocal capsule, stable_system, stable_user, prefix_hash, warmup, rewarmed
             cached = None
             if settings.enable_local_translation_cache and not force:
                 cached = load_translation(cache_root, cache_key)
             if cached is not None:
                 usage_totals["local_cache_hits"] = usage_totals.get("local_cache_hits", 0) + 1
+                if is_probe:
+                    limit = partition_limit_for_probe(decision.value, cfg)
+                    partition_gate = ConcurrencyGate(limit)
+                    barrier_done = True
                 return str(cached["translation_text"]), {}, True
 
             if decision == ProbeDecision.DEGRADED:
@@ -467,6 +494,25 @@ async def translate_partition_async(
                         min_ratio=settings.cache_probe_min_ratio,
                         warn_ratio=settings.cache_warning_ratio,
                     )
+                # Phase 6: provisional capsule from seed, then rebuild prefix + re-warmup.
+                if capsule.version == 0 and not capsule.provisional:
+                    capsule = provisional_from_seed(
+                        capsule,
+                        source_text=source_text,
+                        translation_text=text,
+                    )
+                    stable_system, stable_user, prefix_hash = _rebuild_prefix()
+                    warmup = await asyncio.to_thread(
+                        run_partition_warmup,
+                        chat_fn=chat_fn,
+                        settings=settings,
+                        stable_system=stable_system,
+                        stable_user=stable_user,
+                        prefix_hash=prefix_hash,
+                        user_id=user_id,
+                    )
+                    usage_totals["api_calls"] = usage_totals.get("api_calls", 0) + 1
+                    rewarmed = True
                 # Warm-up barrier: open concurrency for remaining units.
                 limit = partition_limit_for_probe(decision.value, cfg)
                 partition_gate = ConcurrencyGate(limit)
@@ -567,4 +613,9 @@ async def translate_partition_async(
         "assembled": assembled,
         "re_probed": re_probed,
         "partition_concurrency": partition_gate.limit,
+        "style_capsule_version": capsule.version_label(),
+        "style_capsule_hash": capsule.content_hash(),
+        "style_capsule": capsule,
+        "rewarmed": rewarmed,
+        "prefix_hash": prefix_hash,
     }

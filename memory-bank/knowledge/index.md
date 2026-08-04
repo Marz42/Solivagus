@@ -14,7 +14,7 @@ Agent 路由指南：先恢复 Task/Session 与 Context Manifest，再按任务�
 * [Contracts](contracts/) - CLI, workspace/artifact, repository contracts.
 * [Domains](domains/) - Document processing pipeline.
 * [Manuals](manuals/) - MVP baseline, Phase 2 GPU OCR, Phase 4 provider/cache.
-* [Plans](plans/) - Solivagus v1 phased roadmap (Phase 0–5 done; next Phase 6).
+* [Plans](plans/) - Solivagus v1 phased roadmap (Phase 0–6 done; next Phase 7).
 * [Known Issues](known-issues/) - e.g. paddlepaddle-gpu not on public PyPI.
 
 ## Source materials (not OKF knowledge)

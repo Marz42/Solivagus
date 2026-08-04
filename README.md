@@ -51,7 +51,7 @@ solivagus report
 
 OCR 产物示例：`example\Attention_Is_All_You_Need.solivagus\`（`source.md`、`ocr/batch-*/done.json`、`plan-report.json`、`units/`、`partitions/`）。样例 PDF 与产物在本机 `example/`，不入库。
 
-当前进度：Phase 0–5 完成（OCR + 规划 + Provider/Cache + 异步并发）；下一步 Phase 6 风格胶囊。细节见 `memory-bank/knowledge/plans/solivagus-v1-roadmap.md`。
+当前进度：Phase 0–6 完成；下一步 Phase 7 机械 QA。细节见 `memory-bank/knowledge/plans/solivagus-v1-roadmap.md`。
 
 ---
 

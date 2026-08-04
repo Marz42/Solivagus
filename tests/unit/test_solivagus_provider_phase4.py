@@ -211,12 +211,15 @@ class PartitionTranslateTests(unittest.TestCase):
                 ("First unit text.", "u00001"),
                 ("Second unit text.", "u00002"),
             ):
+                from solivagus.style.capsule import empty_capsule
+
                 key = translation_cache_key(
                     source_text=text,
                     provider="openai-compatible",
                     model=settings.llm_model,
                     prompt_version=settings.prompt_version,
                     target_language=settings.target_language,
+                    style_capsule_hash=empty_capsule().content_hash(),
                     translation_parameters=f"target_mode={settings.target_mode}",
                 )
                 store_translation(

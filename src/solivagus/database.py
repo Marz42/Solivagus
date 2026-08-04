@@ -280,9 +280,9 @@ class Database:
                   document_id, partition_id, unit_key, sequence_index, heading_path,
                   source_pages, source_text, source_hash, source_tokens,
                   estimated_output_tokens, status, translation_text, translation_hash,
-                  provider, model, prompt_version, attempt_count, warning_flags,
-                  source_file, translated_file
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  provider, model, prompt_version, style_capsule_version, attempt_count,
+                  warning_flags, source_file, translated_file
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     document_id,
@@ -301,6 +301,7 @@ class Database:
                     unit.get("provider"),
                     unit.get("model"),
                     unit.get("prompt_version"),
+                    unit.get("style_capsule_version"),
                     unit.get("attempt_count", 0),
                     unit.get("warning_flags"),
                     unit.get("source_file"),
@@ -417,6 +418,8 @@ class Database:
         model: str | None = None,
         attempt_count: int | None = None,
         warning_flags: str | None = None,
+        prompt_version: str | None = None,
+        style_capsule_version: str | None = None,
     ) -> None:
         self.execute(
             """
@@ -427,7 +430,9 @@ class Database:
               provider = COALESCE(?, provider),
               model = COALESCE(?, model),
               attempt_count = COALESCE(?, attempt_count),
-              warning_flags = COALESCE(?, warning_flags)
+              warning_flags = COALESCE(?, warning_flags),
+              prompt_version = COALESCE(?, prompt_version),
+              style_capsule_version = COALESCE(?, style_capsule_version)
             WHERE id = ?
             """,
             (
@@ -438,8 +443,76 @@ class Database:
                 model,
                 attempt_count,
                 warning_flags,
+                prompt_version,
+                style_capsule_version,
                 unit_id,
             ),
+        )
+
+    def insert_style_capsule(
+        self,
+        document_id: int,
+        *,
+        version: int,
+        rules_json: str,
+        terminology_json: str,
+        examples_json: str,
+        boundary_context_json: str,
+        content_hash: str,
+        source_partition_id: int | None = None,
+    ) -> int:
+        cur = self.execute(
+            """
+            INSERT INTO style_capsules(
+              document_id, version, source_partition_id, rules_json, terminology_json,
+              examples_json, boundary_context_json, content_hash, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                document_id,
+                version,
+                source_partition_id,
+                rules_json,
+                terminology_json,
+                examples_json,
+                boundary_context_json,
+                content_hash,
+                utc_now(),
+            ),
+        )
+        self.commit()
+        return int(cur.lastrowid)
+
+    def get_latest_style_capsule(self, document_id: int) -> sqlite3.Row | None:
+        return self.fetchone(
+            """
+            SELECT * FROM style_capsules
+            WHERE document_id = ?
+            ORDER BY version DESC, id DESC
+            LIMIT 1
+            """,
+            (document_id,),
+        )
+
+    def get_style_capsule(self, document_id: int, version: int) -> sqlite3.Row | None:
+        return self.fetchone(
+            """
+            SELECT * FROM style_capsules
+            WHERE document_id = ? AND version = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (document_id, version),
+        )
+
+    def list_style_capsules(self, document_id: int) -> list[sqlite3.Row]:
+        return self.fetchall(
+            """
+            SELECT * FROM style_capsules
+            WHERE document_id = ?
+            ORDER BY version ASC, id ASC
+            """,
+            (document_id,),
         )
 
     def update_document_status(

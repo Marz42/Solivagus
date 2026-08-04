@@ -56,7 +56,7 @@ paradigma:
 5. 分区：warm-up → probe（≥70% 放行，50–70% 低并发，<50% 降级）→ 并发 Unit（`target_mode=repeat`）
    - **Phase 4 已实现** warm-up/probe/降级/本地缓存/usage
    - **Phase 5 已实现** warm-up barrier 后 asyncio 并发（full/low/degraded 不同区内并发）
-6. 分区结束更新 style capsule，再进入下一分区
+6. 分区结束更新 style capsule，再进入下一分区（**Phase 6 已实现**）
 7. QA（结构/数字/引用/术语）→ 必要时定向修复一次 → 组装输出
 
 # Dependencies
