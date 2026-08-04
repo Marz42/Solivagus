@@ -90,7 +90,7 @@ python legacy/pdf_translate_cli_v0_2.py "example\Qwen3_TTS.pdf" `
   --work-dir "example\Qwen3_TTS.translation"
 ```
 
-夜间批处理惯例目录仍为 `D:\PDFS`（见 `project-brief/nightauto.ps1`）；Phase 0 不要求改脚本路径。
+夜间批处理目录由 `SOLIVAGUS_BATCH_DIR` / 配置 / CLI 指定（无硬编码默认；`project-brief/nightauto.ps1` 仅为历史本机示例）。Phase 0 不要求改脚本路径。
 
 ## 4. 自动化骨架
 

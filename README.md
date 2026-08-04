@@ -52,7 +52,14 @@ solivagus run "example\Attention Is All You Need.pdf" --stage qa
 solivagus report
 ```
 
-当前进度：Phase 0–7 完成；下一步 Phase 8 批量生产化。细节见 `memory-bank/knowledge/plans/solivagus-v1-roadmap.md`。
+当前进度：Phase 0–8 完成（批目录可配置，无硬编码默认）。细节见 `memory-bank/knowledge/plans/solivagus-v1-roadmap.md`；夜间批处理见 `memory-bank/knowledge/manuals/solivagus-phase8-batch.md`。
+
+```powershell
+# 批处理（必须显式指定目录，或设置 SOLIVAGUS_BATCH_DIR）
+solivagus batch "E:\papers\inbox" --profile balanced --prevent-sleep
+solivagus report
+solivagus retry --all-failed
+```
 
 OCR 产物示例：`example\Attention_Is_All_You_Need.solivagus\`（`source.md`、`ocr/batch-*/done.json`、`plan-report.json`、`units/`、`partitions/`、`qa-report.md`）。样例 PDF 与产物在本机 `example/`，不入库。
 

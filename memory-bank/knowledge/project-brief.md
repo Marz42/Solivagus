@@ -54,7 +54,7 @@ PDF → PaddleOCR-VL → Markdown → 结构感知分块 → DeepSeek 翻译 →
 | User | Need | Frequency |
 |------|------|-----------|
 | 个人研究者 / 技术读者 | 可靠翻译论文、技术报告、教材级长文档 | Daily / Weekly |
-| 批量处理用户 | 目录批处理、断点续跑、夜间无人值守（惯例目录 `D:\PDFS`） | Per overnight batch |
+| 批量处理用户 | 目录批处理、断点续跑、夜间无人值守（批目录可配置） | Per overnight batch |
 | 成本敏感用户 | 利用 DeepSeek KV Cache 控制长文档费用 | Per long document |
 
 # Scope
@@ -83,7 +83,7 @@ manifest.json
 
 1. 可靠处理论文 / 报告 / 书籍级长文档
 2. 断点续跑与夜间无人值守
-3. 批量目录处理（夜间惯例：`D:\PDFS`）
+3. 批量目录处理（路径由配置/`SOLIVAGUS_BATCH_DIR`/CLI 指定）
 4. DeepSeek KV Cache 降本
 5. API 并发缩短总时长
 6. 保留标题、段落、公式、代码、图片、页码与引用结构

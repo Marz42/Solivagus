@@ -46,7 +46,7 @@ paradigma:
 | Command | Purpose |
 |---------|---------|
 | `solivagus run <pdf>` | 处理单文档；支持 `--stage ocr|plan|translate|qa|all`、强制重跑标志 |
-| `solivagus batch <dir>` | 目录批处理；默认夜间惯例可指向 `D:\PDFS`；`--recursive`、`--continue-on-error`、`--prevent-sleep` |
+| `solivagus batch [dir]` | 目录批处理；`dir` 或配置/`SOLIVAGUS_BATCH_DIR`（无硬编码默认路径）；`--recursive`、`--continue-on-error`、`--prevent-sleep` |
 | `solivagus plan <pdf>` | 只规划 Unit/Partition 与费用估计，不翻译 |
 | `solivagus status [pdf]` | 工作区或单文档状态 |
 | `solivagus retry <pdf>\|--all-failed` | 重试失败项 |
@@ -68,10 +68,11 @@ run:
   force_qa: bool
   strict: bool  # maps to qa_strict
 batch:
-  input_dir: path  # convention: D:\PDFS
+  input_dir: optional path  # else Settings.batch_dir / SOLIVAGUS_BATCH_DIR
   recursive: bool
   continue_on_error: bool
   prevent_sleep: bool
+  profile: optional enum [conservative, balanced, throughput]
 plan:
   input: path
   model: optional string  # default deepseek-v4-flash

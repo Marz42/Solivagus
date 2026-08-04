@@ -172,6 +172,7 @@ def run_ocr_stage(
     prevent_sleep: bool = False,
     worker_fn: WorkerFn | None = None,
     artifact_dir: Path | None = None,
+    acquire_supervisor_lock: bool = True,
 ) -> dict[str, Any]:
     pdf_path = pdf_path.expanduser().resolve()
     config = config or OcrConfig()
@@ -190,11 +191,15 @@ def run_ocr_stage(
     ws_root = workspace_root(workspace)
     supervisor_lock = ws_root / "supervisor.lock"
     doc_lock = artifact / ".run.lock"
-    acquire_lock(supervisor_lock, command=f"ocr {pdf_path.name}")
+    held_supervisor = False
+    if acquire_supervisor_lock:
+        acquire_lock(supervisor_lock, command=f"ocr {pdf_path.name}")
+        held_supervisor = True
     try:
         acquire_lock(doc_lock, command=f"ocr {pdf_path.name}")
     except LockError:
-        release_lock(supervisor_lock)
+        if held_supervisor:
+            release_lock(supervisor_lock)
         raise
 
     try:
@@ -382,4 +387,5 @@ def run_ocr_stage(
         }
     finally:
         release_lock(doc_lock)
-        release_lock(supervisor_lock)
+        if held_supervisor:
+            release_lock(supervisor_lock)

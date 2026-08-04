@@ -57,7 +57,7 @@ paradigma:
  → 8→16→32 并发（评估 64）
  → 风格胶囊
  → 机械 QA
- → HTML 表格翻译 / 批量生产化（D:\PDFS）
+ → HTML 表格翻译 / 批量生产化（可配置 batch_dir）
 ```
 
 业务代码：`src/solivagus/`。依赖钉选：`requirements-gpu.txt`。样例仅本机 `example/`。
@@ -79,7 +79,7 @@ max_global_concurrency: 64
 target_mode: repeat
 cache_probe_min_ratio: 0.70
 fallback_to_source: true
-batch_default_dir: "D:\\PDFS"
+batch_dir: null  # set SOLIVAGUS_BATCH_DIR / config / CLI; no machine default
 ```
 
 # Tasks
@@ -148,11 +148,14 @@ batch_default_dir: "D:\\PDFS"
 
 ## Phase 8 — 批量生产化
 
-- [ ] 双队列、`D:\PDFS` 批处理、manifest、配置档案、Task Scheduler 说明
-- [ ] 验收：整夜无人值守；早上一份报告
+- [x] 双队列（OCR 串行 + 翻译 FIFO 并行）、可配置批目录（无硬编码默认）
+- [x] 批量 manifest、全局 usage 汇总、夜间报告
+- [x] `solivagus batch` / `retry`；profiles：conservative / balanced / throughput
+- [x] Windows Task Scheduler 说明 + `scripts/night-batch.ps1`
+- [x] 验收单测：`tests/unit/test_solivagus_batch_phase8.py`
 
 # Status
 
 **in-progress**
 
-Phase 0–7 完成。下一会话：**Phase 8**（批量生产化）。
+Phase 0–8 代码路径完成。下一会话：可选生产浸泡 / 文档润色。

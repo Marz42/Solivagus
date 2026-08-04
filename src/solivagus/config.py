@@ -30,8 +30,10 @@ class Settings(BaseSettings):
         default_factory=lambda: Path.cwd(),
         validation_alias="SOLIVAGUS_WORKSPACE",
     )
-    batch_dir: Path = Field(
-        default=Path(r"D:\PDFS"),
+    # Batch PDF root for Phase 8; no hardcoded machine path.
+    # Set via SOLIVAGUS_BATCH_DIR, config, or `solivagus batch <dir>`.
+    batch_dir: Path | None = Field(
+        default=None,
         validation_alias="SOLIVAGUS_BATCH_DIR",
     )
     target_language: str = "简体中文"

@@ -60,6 +60,7 @@ paradigma:
 7. QA（结构/数字/引用/术语）→ 必要时定向修复一次 → 组装输出（**Phase 7 已实现**；产物 `qa-report.md`）
    - HTML 表格默认原样保留；可选 `html_table_mode=translate_cells`（JSON 回填，不改标签骨架）
    - `references_mode=keep`：仅将 References 标题译为「参考文献」
+8. 批处理 Supervisor：可配置目录 → OCR 队列（串行）与翻译队列（FIFO 并行）→ manifest / global usage / nightly 报告（**Phase 8 已实现**）
 
 # Dependencies
 

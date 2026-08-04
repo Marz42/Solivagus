@@ -294,6 +294,90 @@ def run_cmd(
                 typer.echo(f"{key}: {value}")
 
 
+@app.command("batch")
+def batch_cmd(
+    ctx: typer.Context,
+    directory: Optional[Path] = typer.Argument(
+        None,
+        help="PDF directory (else SOLIVAGUS_BATCH_DIR / config batch_dir)",
+    ),
+    recursive: bool = typer.Option(False, "--recursive"),
+    continue_on_error: bool = typer.Option(
+        True, "--continue-on-error/--fail-fast", help="Isolate document failures"
+    ),
+    prevent_sleep: bool = typer.Option(True, "--prevent-sleep/--allow-sleep"),
+    profile: str = typer.Option(
+        "balanced", "--profile", help="conservative | balanced | throughput"
+    ),
+    device: Optional[str] = typer.Option(None, "--device", help="OCR device, e.g. gpu:0"),
+) -> None:
+    """Batch-process PDFs with OCR + translate dual queues."""
+    from solivagus.batch import BatchDirError, BatchSupervisorError, run_batch
+
+    settings = ctx.obj["settings"]
+    if device:
+        settings.ocr_device = device
+    try:
+        result = run_batch(
+            settings=settings,
+            batch_dir=directory,
+            recursive=recursive,
+            continue_on_error=continue_on_error,
+            prevent_sleep=prevent_sleep,
+            profile=profile,
+        )
+    except (BatchDirError, BatchSupervisorError, ValueError) as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo("batch complete")
+    for key in (
+        "batch_dir",
+        "profile",
+        "total",
+        "completed",
+        "failed",
+        "manifest",
+        "global_usage",
+        "nightly_md",
+    ):
+        if key in result:
+            typer.echo(f"{key}: {result[key]}")
+    if result.get("failed"):
+        raise typer.Exit(code=1)
+
+
+@app.command("retry")
+def retry_cmd(
+    ctx: typer.Context,
+    pdf: Optional[Path] = typer.Argument(None, help="Failed PDF to retry"),
+    all_failed: bool = typer.Option(False, "--all-failed", help="Retry all failed docs"),
+    profile: str = typer.Option("balanced", "--profile"),
+) -> None:
+    """Retry failed document(s) without clearing successful checkpoints."""
+    from solivagus.batch import BatchSupervisorError, retry_failed_documents
+
+    settings = ctx.obj["settings"]
+    if pdf is None and not all_failed:
+        raise typer.BadParameter("pass a PDF path or --all-failed")
+    try:
+        result = retry_failed_documents(
+            settings=settings,
+            pdf=pdf,
+            all_failed=all_failed,
+            profile=profile,
+        )
+    except BatchSupervisorError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo("retry complete")
+    for key, value in result.items():
+        if key == "documents":
+            continue
+        typer.echo(f"{key}: {value}")
+    if result.get("failed"):
+        raise typer.Exit(code=1)
+
+
 @app.command("report")
 def report_cmd(
     ctx: typer.Context,
@@ -301,7 +385,8 @@ def report_cmd(
         None, "--output-dir", help="Where to write nightly-*.md/json"
     ),
 ) -> None:
-    """Write a simple nightly summary from SQLite document rows."""
+    """Write nightly summary and optional global usage rollup."""
+    from solivagus.batch.usage import aggregate_usage_reports
     from solivagus.ocr.report import write_nightly_report
 
     settings = ctx.obj["settings"]
@@ -313,18 +398,25 @@ def report_cmd(
                 "SELECT status FROM ocr_batches WHERE document_id = ?",
                 (int(doc["id"]),),
             )
-            ok = sum(1 for item in batches if str(item["status"]).startswith("done") or item["status"] == "skipped_done")
+            ok = sum(
+                1
+                for item in batches
+                if str(item["status"]).startswith("done") or item["status"] == "skipped_done"
+            )
             rows.append(
                 {
                     "display_name": doc["display_name"],
                     "status": doc["status"],
                     "ocr_batches_ok": ok,
                     "failed_pages": None,
+                    "artifact_dir": doc["artifact_dir"],
                 }
             )
         md_path, json_path = write_nightly_report(out, documents=rows)
+        usage_path, _usage = aggregate_usage_reports(rows, output_dir=out)
     typer.echo(f"wrote {md_path}")
     typer.echo(f"wrote {json_path}")
+    typer.echo(f"wrote {usage_path}")
 
 
 def main() -> None:

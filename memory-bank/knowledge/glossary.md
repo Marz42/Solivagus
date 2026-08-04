@@ -42,7 +42,7 @@ paradigma:
 | Translation Unit | 一次翻译请求的最小成功/失败单元 | 结构感知切分，非固定字符块 |
 | Cache Partition | 多个连续 Unit 共享的稳定 KV Cache 前缀范围 | 分区间串行，区内并发 |
 | Style Capsule | 分区边界冻结的术语、文风样例与边界上下文 | 分区内不可变 |
-| Batch Supervisor | 批处理总控：队列、锁、恢复、夜间报告 | 夜间目录惯例 `D:\PDFS` |
+| Batch Supervisor | 批处理总控：队列、锁、恢复、夜间报告 | 批目录可配置，无固定机器路径 |
 | OCR Worker | 单文档 OCR 子进程 | 退出以回收 CUDA/Paddle 资源 |
 | Characterization fixture | 冻结 MVP 行为的输入/输出样本 | 本机 `example/`，不入库 |
 | Memory-Bank | Paradigma 三态外部记忆 | 开发用，非 PDF 运行时状态 |

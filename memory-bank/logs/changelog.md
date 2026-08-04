@@ -8,13 +8,17 @@
 
 ## [Unreleased]
 
+### Changed
+- 批处理 PDF 根目录：`Settings.batch_dir` 默认改为 `null`；通过 `SOLIVAGUS_BATCH_DIR`、配置或 CLI 显式指定，不再默认 `D:\PDFS`。
+
 ### Added
+- Phase 8：`solivagus batch` / `retry`、OCR/翻译双队列、profiles、batch manifest、global usage、Task Scheduler 手册与 `scripts/night-batch.ps1`。
 - 从 Paradigma 模板初始化项目 Memory-Bank。
 - 写入 Solivagus project-brief / architecture / conventions / glossary。
 - 新增 CLI、workspace-artifact、repository 契约与 document-pipeline 领域文档。
 - 新增 `plans/solivagus-v1-roadmap.md`（Phase 0–8）。
 - 新增 ADR-001：包名/CLI/工作区统一为 `solivagus`。
-- 记录环境决策：Python 3.11 基线 / 推荐 3.12、uv、OAI-compatible + 仅 `deepseek-v4-flash`、批目录 `D:\PDFS`。
+- 记录环境决策：Python 3.11 基线 / 推荐 3.12、uv、OAI-compatible + 仅 `deepseek-v4-flash`；批目录可配置（不默认 `D:\PDFS`）。
 - 提交 `requirements-gpu.txt`（已跑通 GPU/OCR 钉选）；整目录忽略 `example/`。
 - 加固 `.gitignore`（`.env`、`.solivagus/`、`example/`、PDF）并添加 `.env.example`。
 - Phase 0：归档 `legacy/pdf_translate_cli_v0_2.py`，新增 MVP baseline manual 与 `tests/characterization/test_mvp_baseline.py`。

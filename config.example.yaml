@@ -2,7 +2,8 @@
 # Copy values into your environment or load via future --config support.
 
 workspace: "."
-batch_dir: "D:/PDFS"
+# Required for `solivagus batch` when no CLI directory is passed.
+# batch_dir: "E:/papers/inbox"
 
 provider:
   name: openai-compatible
@@ -59,3 +60,8 @@ qa:
   max_repair_attempts: 1
   strict: false
   # repair_model: deepseek-v4-pro
+
+batch:
+  # profile applied via CLI --profile: conservative | balanced | throughput
+  continue_on_error: true
+  prevent_sleep: true

@@ -113,7 +113,7 @@ solivagus version
 | Module | Responsibility | Must not |
 |--------|----------------|----------|
 | CLI (`cli.py`) | `run` / `batch` / `plan` / `status` / `retry` / `inspect` / `report` | 内嵌 OCR 模型生命周期 |
-| Batch Supervisor | 队列、锁、恢复、夜间报告、防睡眠；默认批目录 `D:\PDFS` | 直接调用模型 HTTP |
+| Batch Supervisor | 队列、锁、恢复、夜间报告、防睡眠；批目录由配置/`SOLIVAGUS_BATCH_DIR`/CLI 指定 | 直接调用模型 HTTP |
 | OCR Worker | 独立子进程；页面批次 checkpoint；失败降级 | 调用翻译 API |
 | Structure Processor | Markdown 树、节点分类、HTML 表格独立节点 | Token 计费或 HTTP |
 | Token & Plan Engine | Unit / Partition 规划、成本预估 | 发起翻译请求 |
@@ -161,7 +161,7 @@ PDF
 - 是否在 CLI 增加兼容短别名？（首版不做）
 - TokenCounter 何时切换到 DeepSeek 官方 exact tokenizer？
 
-已关闭：包/CLI 名 → `solivagus`（ADR-001）；Python → 3.11 基线 / 推荐 3.12 + uv；模型 → OAI-compatible 抽象 + 仅 `deepseek-v4-flash`；批目录惯例 → `D:\PDFS`；样例不入库 → `example/`；MVP 归档 → `legacy/`；preflight → pypdfium2；Phase 2 GPU OCR（F1）→ 已验收；Phase 3 规划替换 OCR 字符种子 units → 已实现；Phase 4 warm-up/probe/本地缓存 → 已实现；Phase 5 区内 asyncio 并发 + 429 自适应 → 已实现；Phase 6 风格胶囊分区冻结/handoff → 已实现；Phase 7 机械 QA / 定向修复 / 表格与参考文献处理器 → 已实现。
+已关闭：包/CLI 名 → `solivagus`（ADR-001）；Python → 3.11 基线 / 推荐 3.12 + uv；模型 → OAI-compatible 抽象 + 仅 `deepseek-v4-flash`；批目录 → 可配置（无 `D:\PDFS` 硬编码默认）；样例不入库 → `example/`；MVP 归档 → `legacy/`；preflight → pypdfium2；Phase 2 GPU OCR（F1）→ 已验收；Phase 3 规划替换 OCR 字符种子 units → 已实现；Phase 4 warm-up/probe/本地缓存 → 已实现；Phase 5 区内 asyncio 并发 + 429 自适应 → 已实现；Phase 6 风格胶囊分区冻结/handoff → 已实现；Phase 7 机械 QA / 定向修复 / 表格与参考文献处理器 → 已实现；Phase 8 批量双队列 / profiles / manifest / 夜间报告 → 已实现。
 
 # Citations
 
