@@ -26,3 +26,4 @@
 - Phase 4：分区 warm-up/probe、本地翻译缓存、`usage-report.json`、低命中自动降级；`translation_attempts` 记录 cache hit。
 - Phase 5：asyncio 分区内并发（warm-up barrier 后放量）、global/document/partition 闸门、429 自适应减半、SQLite 单 writer。
 - Phase 6：风格胶囊（分区冻结、P1 provisional re-warmup、跨区 handoff、`style_capsules/vN.json`）。
+- Phase 7：机械 QA + 定向修复（最多 1 次）、`qa-report.md`、HTML 表格单元格翻译器、`references_mode=keep`。

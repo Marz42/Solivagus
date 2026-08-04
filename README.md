@@ -45,13 +45,16 @@ solivagus plan "example\Attention Is All You Need.pdf"
 solivagus import-mvp example\Qwen3_TTS.translation --pdf example\Qwen3_TTS.pdf
 solivagus run example\Qwen3_TTS.pdf --stage translate
 
+# 机械 QA（也可 --stage all 在翻译后串联）
+solivagus run "example\Attention Is All You Need.pdf" --stage qa
+
 # 夜间汇总
 solivagus report
 ```
 
-OCR 产物示例：`example\Attention_Is_All_You_Need.solivagus\`（`source.md`、`ocr/batch-*/done.json`、`plan-report.json`、`units/`、`partitions/`）。样例 PDF 与产物在本机 `example/`，不入库。
+当前进度：Phase 0–7 完成；下一步 Phase 8 批量生产化。细节见 `memory-bank/knowledge/plans/solivagus-v1-roadmap.md`。
 
-当前进度：Phase 0–6 完成；下一步 Phase 7 机械 QA。细节见 `memory-bank/knowledge/plans/solivagus-v1-roadmap.md`。
+OCR 产物示例：`example\Attention_Is_All_You_Need.solivagus\`（`source.md`、`ocr/batch-*/done.json`、`plan-report.json`、`units/`、`partitions/`、`qa-report.md`）。样例 PDF 与产物在本机 `example/`，不入库。
 
 ---
 

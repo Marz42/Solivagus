@@ -69,6 +69,19 @@ class Settings(BaseSettings):
     low_probe_concurrency: int = 2
     adaptive_concurrency: bool = True
 
+    # QA / structure (Phase 7)
+    qa_enabled: bool = True
+    qa_numerical_check: bool = True
+    qa_structure_check: bool = True
+    qa_citation_check: bool = True
+    qa_terminology_check: bool = True
+    qa_auto_repair: bool = True
+    qa_max_repair_attempts: int = 1
+    qa_strict: bool = False
+    repair_model: str | None = None
+    references_mode: Literal["keep", "translate_titles", "translate_all"] = "keep"
+    html_table_mode: Literal["keep", "translate_cells"] = "keep"
+
     # OCR
     ocr_pipeline_version: str = "v1.6"
     ocr_device: str | None = Field(default=None, validation_alias="SOLIVAGUS_OCR_DEVICE")

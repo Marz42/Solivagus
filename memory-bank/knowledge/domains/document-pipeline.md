@@ -57,7 +57,9 @@ paradigma:
    - **Phase 4 已实现** warm-up/probe/降级/本地缓存/usage
    - **Phase 5 已实现** warm-up barrier 后 asyncio 并发（full/low/degraded 不同区内并发）
 6. 分区结束更新 style capsule，再进入下一分区（**Phase 6 已实现**）
-7. QA（结构/数字/引用/术语）→ 必要时定向修复一次 → 组装输出
+7. QA（结构/数字/引用/术语）→ 必要时定向修复一次 → 组装输出（**Phase 7 已实现**；产物 `qa-report.md`）
+   - HTML 表格默认原样保留；可选 `html_table_mode=translate_cells`（JSON 回填，不改标签骨架）
+   - `references_mode=keep`：仅将 References 标题译为「参考文献」
 
 # Dependencies
 

@@ -522,6 +522,7 @@ class Database:
         status: str,
         translation_status: str | None = None,
         ocr_status: str | None = None,
+        qa_status: str | None = None,
     ) -> None:
         self.execute(
             """
@@ -529,10 +530,11 @@ class Database:
               status = ?,
               translation_status = COALESCE(?, translation_status),
               ocr_status = COALESCE(?, ocr_status),
+              qa_status = COALESCE(?, qa_status),
               updated_at = ?
             WHERE id = ?
             """,
-            (status, translation_status, ocr_status, utc_now(), document_id),
+            (status, translation_status, ocr_status, qa_status, utc_now(), document_id),
         )
         self.commit()
 

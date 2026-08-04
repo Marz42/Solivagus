@@ -45,7 +45,7 @@ paradigma:
 
 | Command | Purpose |
 |---------|---------|
-| `solivagus run <pdf>` | 处理单文档；支持 `--stage ocr|translate`、强制重跑标志 |
+| `solivagus run <pdf>` | 处理单文档；支持 `--stage ocr|plan|translate|qa|all`、强制重跑标志 |
 | `solivagus batch <dir>` | 目录批处理；默认夜间惯例可指向 `D:\PDFS`；`--recursive`、`--continue-on-error`、`--prevent-sleep` |
 | `solivagus plan <pdf>` | 只规划 Unit/Partition 与费用估计，不翻译 |
 | `solivagus status [pdf]` | 工作区或单文档状态 |
@@ -61,10 +61,12 @@ paradigma:
 ```yaml
 run:
   input: path
-  stage: optional enum [all, ocr, translate]
+  stage: optional enum [all, ocr, plan, translate, qa]
   force_ocr: bool
   force_translate: bool
   force_plan: bool
+  force_qa: bool
+  strict: bool  # maps to qa_strict
 batch:
   input_dir: path  # convention: D:\PDFS
   recursive: bool

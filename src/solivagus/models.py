@@ -31,3 +31,4 @@ class Stage(StrEnum):
     OCR = "ocr"
     PLAN = "plan"
     TRANSLATE = "translate"
+    QA = "qa"

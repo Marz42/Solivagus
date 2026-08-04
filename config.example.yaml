@@ -17,6 +17,8 @@ translation:
   chunk_chars: 12000  # OCR provisional seeds only; plan uses token budgets
   fallback_to_source: true
   strict: false
+  references_mode: keep  # keep | translate_titles | translate_all
+  html_table_mode: keep  # keep | translate_cells
 
 planning:
   unit_target_tokens: 12000
@@ -46,3 +48,14 @@ concurrency:
   max_global: 64
   low_probe: 2
   adaptive: true
+
+qa:
+  enabled: true
+  numerical_check: true
+  structure_check: true
+  citation_check: true
+  terminology_check: true
+  auto_repair: true
+  max_repair_attempts: 1
+  strict: false
+  # repair_model: deepseek-v4-pro

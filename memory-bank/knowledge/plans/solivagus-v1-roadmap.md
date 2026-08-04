@@ -140,7 +140,11 @@ batch_default_dir: "D:\\PDFS"
 
 ## Phase 7 — QA 与专用结构处理
 
-- [ ] 机械 QA、定向修复、表格翻译器、参考文献模式
+- [x] 机械 QA（结构/数字/引用/术语/长度）、定向修复（最多 1 次）、`qa-report.md`
+- [x] HTML 表格单元格翻译器（默认 `keep`；`translate_cells` 经 JSON 回填保结构）
+- [x] 参考文献模式默认 `references_mode=keep`（仅译标题为「参考文献」）
+- [x] CLI：`run --stage qa|all` + `--force-qa`；文档 `qa_status` / `qa_complete`
+- [x] 验收单测：`tests/unit/test_solivagus_qa_phase7.py`
 
 ## Phase 8 — 批量生产化
 
@@ -151,4 +155,4 @@ batch_default_dir: "D:\\PDFS"
 
 **in-progress**
 
-Phase 0–6 完成。下一会话：**Phase 7**（机械 QA 与专用结构处理）。
+Phase 0–7 完成。下一会话：**Phase 8**（批量生产化）。
