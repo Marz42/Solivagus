@@ -17,6 +17,7 @@ from solivagus.concurrency.writer import DbWriter
 from solivagus.config import Settings
 from solivagus.database import Database
 from solivagus.models import UnitStatus
+from solivagus.pipeline.bisect import bisect_source_text
 from solivagus.pipeline.warmup import ProbeDecision, evaluate_probe, run_partition_warmup
 from solivagus.providers.async_openai import is_rate_limited_error
 from solivagus.providers.openai_compatible import (
@@ -553,6 +554,61 @@ async def translate_partition_async(
         except FatalProviderError:
             raise
         except Exception as exc:  # noqa: BLE001
+            # Brief §19.2: structural / persistent failure → bisect before English fallback.
+            halves = bisect_source_text(source_text)
+            max_depth = max(0, int(settings.unit_bisect_max_depth))
+            if halves and max_depth > 0 and not is_probe:
+                left_src, right_src = halves
+                try:
+                    left_text, left_usage = await _kv_translate_unit_async(
+                        unit_key=f"{unit_key}:a",
+                        source_text=left_src,
+                        settings=settings,
+                        chat_fn=chat_fn,
+                        stable_system=stable_system,
+                        stable_user=stable_user,
+                        warmup_assistant=warmup.warmup_assistant,
+                        user_id=user_id,
+                        partition_gate=partition_gate if under_gates else None,
+                    )
+                    right_text, right_usage = await _kv_translate_unit_async(
+                        unit_key=f"{unit_key}:b",
+                        source_text=right_src,
+                        settings=settings,
+                        chat_fn=chat_fn,
+                        stable_system=stable_system,
+                        stable_user=stable_user,
+                        warmup_assistant=warmup.warmup_assistant,
+                        user_id=user_id,
+                        partition_gate=partition_gate if under_gates else None,
+                    )
+                    combined = (left_text.rstrip() + "\n\n" + right_text.lstrip()).rstrip() + "\n"
+                    merged_usage = dict(left_usage or {})
+                    for key in (
+                        "prompt_tokens",
+                        "completion_tokens",
+                        "prompt_cache_hit_tokens",
+                        "prompt_cache_miss_tokens",
+                        "cache_hit_tokens",
+                        "cache_miss_tokens",
+                    ):
+                        if key in (right_usage or {}):
+                            merged_usage[key] = int(merged_usage.get(key) or 0) + int(
+                                right_usage.get(key) or 0
+                            )
+                    await persist_success(
+                        unit=unit,
+                        translated_text=combined,
+                        usage=merged_usage,
+                        from_cache=False,
+                        cache_key=cache_key,
+                        warn_flag="bisected",
+                    )
+                    return
+                except FatalProviderError:
+                    raise
+                except Exception:
+                    pass
             await persist_fallback(unit, exc)
             if strict:
                 raise

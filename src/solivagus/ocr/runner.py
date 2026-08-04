@@ -60,7 +60,9 @@ def _default_worker(
             "use_unwarping": config.use_unwarping,
             "use_chart_recognition": config.use_chart_recognition,
             "batch_pages": config.batch_pages,
-            "ignore_labels": list(config.ignore_labels),
+            "ignore_labels": list(config.resolved_ignore_labels()),
+            "drop_footnotes": config.drop_footnotes,
+            "drop_aside_text": config.drop_aside_text,
         },
     )
     cmd = [

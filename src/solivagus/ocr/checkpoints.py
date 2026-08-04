@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
+from solivagus.ocr.labels import BASE_IGNORE_LABELS, build_ignore_labels
+
 
 @dataclass(frozen=True)
 class PageRange:
@@ -26,15 +28,24 @@ class OcrConfig:
     use_unwarping: bool = False
     use_chart_recognition: bool = False
     batch_pages: int = 8
-    ignore_labels: tuple[str, ...] = (
-        "number",
-        "footnote",
-        "header",
-        "header_image",
-        "footer",
-        "footer_image",
-        "aside_text",
-    )
+    # Brief §9.5: keep footnote/aside by default (not in ignore list).
+    ignore_labels: tuple[str, ...] = BASE_IGNORE_LABELS
+    drop_footnotes: bool = False
+    drop_aside_text: bool = False
+
+    def resolved_ignore_labels(self) -> tuple[str, ...]:
+        if self.ignore_labels != BASE_IGNORE_LABELS:
+            # Explicit override wins (tests / advanced callers).
+            labels = list(self.ignore_labels)
+            if self.drop_footnotes and "footnote" not in labels:
+                labels.append("footnote")
+            if self.drop_aside_text and "aside_text" not in labels:
+                labels.append("aside_text")
+            return tuple(labels)
+        return build_ignore_labels(
+            drop_footnotes=self.drop_footnotes,
+            drop_aside_text=self.drop_aside_text,
+        )
 
     def config_hash(self, *, source_sha256: str, paddleocr_version: str = "unknown") -> str:
         payload = {
@@ -46,7 +57,9 @@ class OcrConfig:
             "use_unwarping": self.use_unwarping,
             "use_chart_recognition": self.use_chart_recognition,
             "batch_pages": self.batch_pages,
-            "ignore_labels": list(self.ignore_labels),
+            "ignore_labels": list(self.resolved_ignore_labels()),
+            "drop_footnotes": self.drop_footnotes,
+            "drop_aside_text": self.drop_aside_text,
         }
         blob = json.dumps(payload, sort_keys=True, ensure_ascii=False)
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()

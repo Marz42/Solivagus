@@ -15,10 +15,9 @@ _HEADING_RE = re.compile(
 def apply_references_mode(markdown: str, mode: ReferencesMode = "keep") -> str:
     """Apply references policy to a markdown fragment or full document.
 
-    ``keep`` (default): translate only the section heading to 参考文献;
+    ``keep`` (default / production): translate only the section heading to 参考文献;
     leave bibliographic entries, DOIs, authors, and page numbers untouched.
-    ``translate_titles`` / ``translate_all`` are reserved for later phases;
-    currently they behave like ``keep``.
+    ``translate_titles`` / ``translate_all`` are deferred (ADR-002); currently behave like ``keep``.
     """
     if not markdown:
         return markdown

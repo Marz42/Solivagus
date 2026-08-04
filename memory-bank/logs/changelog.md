@@ -10,8 +10,15 @@
 
 ### Changed
 - 批处理 PDF 根目录：`Settings.batch_dir` 默认改为 `null`；通过 `SOLIVAGUS_BATCH_DIR`、配置或 CLI 显式指定，不再默认 `D:\PDFS`。
+- OCR §9.5：默认保留 footnote/aside；`--drop-footnotes` / `--drop-aside-text` 拆开丢弃。
+- `references_mode` 扩展模式收缩为暂缓（ADR-002）；生产默认 `keep`。
 
 ### Added
+- ADR-002：Phase 8 后 brief 差距修复优先级。
+- `--config` YAML 加载（`config_loader.py`）作为可复现配置入口。
+- TokenCounter：优先 `deepseek-tokenizer` / 本地 tokenizer 文件，否则近似。
+- Unit 二分重试（§19.2）：失败后先拆半再英文回退。
+- 文档 `manifest.json` 在 translate/QA 终态稳定写出。
 - Phase 8：`solivagus batch` / `retry`、OCR/翻译双队列、profiles、batch manifest、global usage、Task Scheduler 手册与 `scripts/night-batch.ps1`。
 - 从 Paradigma 模板初始化项目 Memory-Bank。
 - 写入 Solivagus project-brief / architecture / conventions / glossary。

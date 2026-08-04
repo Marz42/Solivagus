@@ -81,6 +81,7 @@ class Settings(BaseSettings):
     qa_max_repair_attempts: int = 1
     qa_strict: bool = False
     repair_model: str | None = None
+    # Production default: keep (heading → 参考文献 only). Other modes deferred (ADR-002).
     references_mode: Literal["keep", "translate_titles", "translate_all"] = "keep"
     html_table_mode: Literal["keep", "translate_cells"] = "keep"
 
@@ -91,6 +92,11 @@ class Settings(BaseSettings):
     ocr_use_orientation: bool = False
     ocr_use_unwarping: bool = False
     ocr_use_chart_recognition: bool = False
+    # Brief §9.5: keep by default; set true to drop independently.
+    ocr_drop_footnotes: bool = False
+    ocr_drop_aside_text: bool = False
+    # Unit bisect depth after retries (brief §19.2).
+    unit_bisect_max_depth: int = 2
 
 
 @lru_cache(maxsize=4)

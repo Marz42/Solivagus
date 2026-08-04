@@ -132,6 +132,8 @@ def run_batch(
         use_unwarping=settings.ocr_use_unwarping,
         use_chart_recognition=settings.ocr_use_chart_recognition,
         batch_pages=settings.ocr_batch_pages,
+        drop_footnotes=settings.ocr_drop_footnotes,
+        drop_aside_text=settings.ocr_drop_aside_text,
     )
 
     results_lock = Lock()

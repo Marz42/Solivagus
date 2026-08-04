@@ -431,6 +431,24 @@ def run_translate_stage(
             db.record_artifact(
                 document_id, name, str(path), sha256_text(path.read_text(encoding="utf-8"))
             )
+
+    from solivagus.pipeline.manifest import write_document_manifest
+
+    manifest_path = write_document_manifest(
+        artifact_dir,
+        document_id=document_id,
+        display_name=str(doc["display_name"]),
+        source_sha256=str(doc["source_sha256"]),
+        status=final_status,
+        model=settings.llm_model,
+        extra={"translated": translated_count, "warnings": warnings},
+    )
+    db.record_artifact(
+        document_id,
+        "manifest",
+        str(manifest_path),
+        sha256_text(manifest_path.read_text(encoding="utf-8")),
+    )
     db.commit()
     return {
         "document_id": document_id,
@@ -441,6 +459,7 @@ def run_translate_stage(
         "status": final_status,
         "mode": "partition_cache",
         "usage_report": str(report_path),
+        "manifest": str(manifest_path),
         "cache_hit_tokens": usage_totals.get("cache_hit_tokens", 0),
         "local_cache_hits": usage_totals.get("local_cache_hits", 0),
         "partitions": probe_summaries,

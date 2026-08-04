@@ -254,6 +254,24 @@ def run_qa_stage(
         translation_status=doc["translation_status"],
         qa_status=qa_status,
     )
+
+    from solivagus.pipeline.manifest import write_document_manifest
+
+    manifest_path = write_document_manifest(
+        artifact_dir,
+        document_id=document_id,
+        display_name=str(doc["display_name"]),
+        source_sha256=str(doc["source_sha256"]),
+        status=doc_status,
+        model=settings.llm_model,
+        extra={"qa_status": qa_status, "unit_count": summary.unit_count},
+    )
+    db.record_artifact(
+        document_id,
+        "manifest",
+        str(manifest_path),
+        sha256_text(manifest_path.read_text(encoding="utf-8")),
+    )
     db.commit()
 
     return {
@@ -269,4 +287,5 @@ def run_qa_stage(
         "failed": summary.failed,
         "html_tables_kept": summary.html_tables_kept,
         "qa_report": str(report_path),
+        "manifest": str(manifest_path),
     }

@@ -10,18 +10,11 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from solivagus.ocr.checkpoints import OcrConfig, PageRange, missing_page_stub, write_done
+from solivagus.ocr.labels import BASE_IGNORE_LABELS
 from solivagus.util.text import atomic_write_json, atomic_write_text, sha256_text
 
 
-DEFAULT_IGNORE_LABELS = [
-    "number",
-    "footnote",
-    "header",
-    "header_image",
-    "footer",
-    "footer_image",
-    "aside_text",
-]
+DEFAULT_IGNORE_LABELS = list(BASE_IGNORE_LABELS)
 
 
 class WorkerError(RuntimeError):
@@ -122,7 +115,7 @@ def run_batch_ocr(
             "use_doc_orientation_classify": config.use_orientation,
             "use_doc_unwarping": config.use_unwarping,
             "use_chart_recognition": config.use_chart_recognition,
-            "markdown_ignore_labels": list(config.ignore_labels) or DEFAULT_IGNORE_LABELS,
+            "markdown_ignore_labels": list(config.resolved_ignore_labels()),
         }
         if config.device:
             kwargs["device"] = config.device
@@ -207,6 +200,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         use_chart_recognition=bool(raw.get("use_chart_recognition") or False),
         batch_pages=int(raw.get("batch_pages") or 8),
         ignore_labels=tuple(raw.get("ignore_labels") or DEFAULT_IGNORE_LABELS),
+        drop_footnotes=bool(raw.get("drop_footnotes") or False),
+        drop_aside_text=bool(raw.get("drop_aside_text") or False),
     )
     page_range = PageRange(args.page_start, args.page_end)
     try:

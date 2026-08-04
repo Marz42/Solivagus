@@ -51,17 +51,32 @@ def main_callback(
     env_file: Optional[Path] = typer.Option(
         None, "--env-file", help="Path to .env (default: ./.env or SOLIVAGUS_ENV_FILE)"
     ),
+    config: Optional[Path] = typer.Option(
+        None, "--config", help="YAML config profile (reproducible settings entry)"
+    ),
     workspace: Optional[Path] = typer.Option(
         None, "--workspace", help="Workspace root containing .solivagus/"
     ),
 ) -> None:
     clear_settings_cache()
-    settings = get_settings(str(env_file) if env_file else None)
+    if config is not None:
+        from solivagus.config_loader import ConfigLoadError, load_settings_from_config
+
+        try:
+            settings = load_settings_from_config(
+                config, env_file=str(env_file) if env_file else None
+            )
+        except ConfigLoadError as exc:
+            typer.secho(str(exc), fg=typer.colors.RED, err=True)
+            raise typer.Exit(code=2) from exc
+    else:
+        settings = get_settings(str(env_file) if env_file else None)
     if workspace is not None:
         settings.workspace = workspace.expanduser().resolve()
     ctx.ensure_object(dict)
     ctx.obj["settings"] = settings
     ctx.obj["env_file"] = env_file
+    ctx.obj["config"] = config
 
 
 @app.command("version")
@@ -206,6 +221,12 @@ def run_cmd(
     strict: bool = typer.Option(False, "--strict"),
     prevent_sleep: bool = typer.Option(False, "--prevent-sleep"),
     device: Optional[str] = typer.Option(None, "--device", help="OCR device, e.g. gpu:0"),
+    drop_footnotes: bool = typer.Option(
+        False, "--drop-footnotes", help="OCR: drop footnote regions (default: keep)"
+    ),
+    drop_aside_text: bool = typer.Option(
+        False, "--drop-aside-text", help="OCR: drop aside_text regions (default: keep)"
+    ),
 ) -> None:
     """Run pipeline stages against SQLite-backed workspace state."""
     from solivagus.ocr.checkpoints import OcrConfig
@@ -227,6 +248,8 @@ def run_cmd(
         use_unwarping=settings.ocr_use_unwarping,
         use_chart_recognition=settings.ocr_use_chart_recognition,
         batch_pages=settings.ocr_batch_pages,
+        drop_footnotes=drop_footnotes or settings.ocr_drop_footnotes,
+        drop_aside_text=drop_aside_text or settings.ocr_drop_aside_text,
     )
 
     with _open_db(settings.workspace) as db:

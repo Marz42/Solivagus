@@ -33,6 +33,10 @@ dev = [
   "ruff>=0.6",
   "mypy>=1.10",
 ]
+# Exact DeepSeek V4 tokenizer (preferred for planning); falls back to approximate.
+tokenizer = [
+  "deepseek-tokenizer>=0.3.0",
+]
 # GPU/OCR pins are tracked in requirements-gpu.txt for the verified local stack.
 gpu = []
 

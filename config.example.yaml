@@ -1,5 +1,5 @@
-# Example Solivagus config profile (Phase 1+)
-# Copy values into your environment or load via future --config support.
+# Example Solivagus config profile.
+# Use: solivagus --config config.example.yaml run ...
 
 workspace: "."
 # Required for `solivagus batch` when no CLI directory is passed.
@@ -13,12 +13,25 @@ provider:
   temperature: 0.1
   timeout_seconds: 300
 
+ocr:
+  pipeline_version: "v1.6"
+  # device: "gpu:0"
+  batch_pages: 8
+  orientation: false
+  unwarping: false
+  chart_recognition: false
+  # Brief §9.5: keep footnotes/aside by default; set true to drop independently.
+  drop_footnotes: false
+  drop_aside_text: false
+  # aliases: keep_footnotes: true / keep_aside_text: true
+
 translation:
   target_language: "zh-CN"
   chunk_chars: 12000  # OCR provisional seeds only; plan uses token budgets
   fallback_to_source: true
   strict: false
-  references_mode: keep  # keep | translate_titles | translate_all
+  # Production default: keep (heading → 参考文献 only). Other modes deferred.
+  references_mode: keep
   html_table_mode: keep  # keep | translate_cells
 
 planning:
