@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from solivagus.assembly import assemble_outputs
+from solivagus.concurrency.limits import ConcurrencyGate
 from solivagus.config import Settings
 from solivagus.database import Database
 from solivagus.models import DocumentStatus, UnitStatus
@@ -278,6 +279,8 @@ def run_translate_stage(
     skipped = 0
     warnings = 0
     probe_summaries: list[dict[str, Any]] = []
+    global_gate = ConcurrencyGate(settings.global_concurrency)
+    document_gate = ConcurrencyGate(settings.per_document_concurrency)
 
     units_by_partition: dict[int | None, list[Any]] = {}
     for unit in units:
@@ -304,6 +307,8 @@ def run_translate_stage(
                 force=force,
                 strict=strict,
                 usage_totals=usage_totals,
+                global_gate=global_gate,
+                document_gate=document_gate,
             )
             translated_count += int(result["translated"])
             skipped += int(result["skipped"])
@@ -317,6 +322,7 @@ def run_translate_stage(
                     "probe_hit_tokens": result["probe_hit_tokens"],
                     "probe_ratio": result["probe_ratio"],
                     "re_probed": result["re_probed"],
+                    "partition_concurrency": result.get("partition_concurrency"),
                 }
             )
     except FatalProviderError:

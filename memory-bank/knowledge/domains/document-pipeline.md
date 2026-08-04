@@ -3,7 +3,7 @@ type: paradigma-domain
 title: Document Processing Pipeline
 description: Dual OCR/translation pipeline responsibilities and risks for Solivagus.
 tags: [domain, pipeline, ocr, translation, solivagus]
-timestamp: 2026-08-03T21:20:00+08:00
+timestamp: 2026-08-04T09:15:00+08:00
 paradigma:
   schema_version: "0.1"
   temperature: warm
@@ -54,6 +54,8 @@ paradigma:
 3. 构建文档树；HTML 表格首版整表保留
 4. 规划 Unit（目标约 12K Token，最大 24K）与 Partition（首包约 96K，后续约 220K，最大 300K）
 5. 分区：warm-up → probe（≥70% 放行，50–70% 低并发，<50% 降级）→ 并发 Unit（`target_mode=repeat`）
+   - **Phase 4 已实现** warm-up/probe/降级/本地缓存/usage
+   - **Phase 5 已实现** warm-up barrier 后 asyncio 并发（full/low/degraded 不同区内并发）
 6. 分区结束更新 style capsule，再进入下一分区
 7. QA（结构/数字/引用/术语）→ 必要时定向修复一次 → 组装输出
 

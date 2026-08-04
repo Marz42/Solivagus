@@ -24,3 +24,4 @@
 - 环境说明：`paddlepaddle-gpu` 须从 Paddle 官方索引安装（`known-issues/paddlepaddle-gpu-not-on-pypi.md`）；README 补充 Solivagus 快速开始。
 - Phase 3：结构树解析、Token Unit/Partition 规划、成本预估、`solivagus plan` / `run --stage plan`；规划产物 `plan-report.json`。
 - Phase 4：分区 warm-up/probe、本地翻译缓存、`usage-report.json`、低命中自动降级；`translation_attempts` 记录 cache hit。
+- Phase 5：asyncio 分区内并发（warm-up barrier 后放量）、global/document/partition 闸门、429 自适应减半、SQLite 单 writer。

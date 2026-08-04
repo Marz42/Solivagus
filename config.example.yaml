@@ -38,3 +38,11 @@ cache:
   warning_ratio: 0.50
   settle_seconds: 0
   enable_local_translation_cache: true
+
+concurrency:
+  global: 16
+  per_document: 8
+  per_partition: 8
+  max_global: 64
+  low_probe: 2
+  adaptive: true

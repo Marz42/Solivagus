@@ -61,6 +61,14 @@ class Settings(BaseSettings):
     cache_settle_seconds: float = 0.0
     enable_local_translation_cache: bool = True
 
+    # Concurrency (Phase 5)
+    global_concurrency: int = 16
+    per_document_concurrency: int = 8
+    per_partition_concurrency: int = 8
+    max_global_concurrency: int = 64
+    low_probe_concurrency: int = 2
+    adaptive_concurrency: bool = True
+
     # OCR
     ocr_pipeline_version: str = "v1.6"
     ocr_device: str | None = Field(default=None, validation_alias="SOLIVAGUS_OCR_DEVICE")

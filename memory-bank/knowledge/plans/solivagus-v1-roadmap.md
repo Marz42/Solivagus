@@ -3,7 +3,7 @@ type: paradigma-plan
 title: Solivagus v1 Roadmap
 description: Phased roadmap from MVP freeze through unattended batch production for Solivagus.
 tags: [plan, roadmap, solivagus, v1]
-timestamp: 2026-08-03T22:00:00+08:00
+timestamp: 2026-08-04T09:30:00+08:00
 paradigma:
   schema_version: "0.1"
   temperature: warm
@@ -127,8 +127,9 @@ batch_default_dir: "D:\\PDFS"
 
 ## Phase 5 — 异步并发
 
-- [ ] Semaphore、barrier、公平队列、自适应限流、单 writer
-- [ ] 验收：并发 16 快于串行；无 SQLite 写冲突
+- [x] Semaphore（global / per-document / per-partition）、warm-up barrier、自适应 429 降速、单 writer
+- [x] 验收：并发吞吐量高于串行（单测 wall-time）；无 SQLite 写冲突（DbWriter 锁）；组装顺序按 sequence_index
+- [x] Probe 决策驱动区内并发：full→`per_partition`、low→`low_probe`、degraded→1
 
 ## Phase 6 — 风格胶囊
 
@@ -147,4 +148,4 @@ batch_default_dir: "D:\\PDFS"
 
 **in-progress**
 
-Phase 0–4 完成。下一会话：**Phase 5**（异步并发翻译）。
+Phase 0–5 完成。下一会话：**Phase 6**（风格胶囊）。

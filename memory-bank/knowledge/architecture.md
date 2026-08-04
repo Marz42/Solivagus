@@ -3,7 +3,7 @@ type: paradigma-architecture
 title: System Architecture
 description: Top-level architecture, technology stack, module boundaries, and key constraints for Solivagus.
 tags: [architecture, system, solivagus]
-timestamp: 2026-08-03T21:20:00+08:00
+timestamp: 2026-08-04T09:15:00+08:00
 paradigma:
   schema_version: "0.1"
   temperature: hot
@@ -58,7 +58,14 @@ Solivagus 是本地 CLI 文档处理系统，不是 Web 服务。运行时由 **
 推荐目标目录：
 
 ```text
-src/solivagus/       # 业务应用（Phase 1+）
+src/solivagus/       # 业务应用
+  structure/         # Phase 3 结构树
+  planning/          # Phase 3 Token / Partition 规划
+  pipeline/          # ocr→plan→translate；warmup / partition_runner
+  providers/         # OAI-compatible + prompts + usage
+  cache/             # 本地翻译缓存
+  reporting/         # usage-report.json
+  ocr/               # Phase 2 无人值守 OCR
 src/paradigma/       # Memory harness（`pd` 入口保留）
 project-brief/       # MVP 与设计源材料（可提交）
 example/             # 本地样例 PDF/产物（整目录 gitignore）
@@ -92,7 +99,7 @@ solivagus version
 | CLI | Typer | 入口命令 `solivagus` |
 | OCR | `paddleocr[doc-parser]` + `paddlepaddle-gpu` | 钉选见 `requirements-gpu.txt`（paddleocr 3.6.0 / paddlepaddle-gpu 3.3.0 等）；F1 GPU 实跑已通过 |
 | PDF preflight | **pypdfium2** | Phase 2 已采用；不替代 OCR |
-| HTTP | httpx.AsyncClient（或 openai SDK 客户端） | 长 timeout；OAI-compatible |
+| HTTP | sync urllib（Phase 4）→ **httpx.AsyncClient**（Phase 5） | 长 timeout；OAI-compatible；`thinking: disabled` |
 | State | SQLite WAL（aiosqlite 或同步封装） | 工作区 `.solivagus/state.db` |
 | Config | pydantic-settings + YAML profile | API Key 仅 `.env` |
 | LLM | OpenAI-compatible Chat Completions | **当前唯一模型 `deepseek-v4-flash`**；`thinking: disabled`；Key 不分流 |
@@ -112,6 +119,7 @@ solivagus version
 | Token & Plan Engine | Unit / Partition 规划、成本预估 | 发起翻译请求 |
 | Provider (OAI-compatible) | 请求、usage、finish_reason、thinking 关闭、user_id | 业务调度策略 |
 | Translation Manager | 分区串行、区内并发、warm-up barrier、自适应限流 | OCR |
+| Local translation cache | 内容寻址；损坏忽略；命中跳过 API | 存 API Key |
 | Style Capsule | 分区边界冻结术语/样例 | 分区内可变 |
 | QA & Assembly | 机械检查、定向修复、中文/双语组装 | 重新 OCR |
 | SQLite State Store | documents / batches / units / partitions / attempts | 存 API Key 或原 PDF 二进制 |
@@ -153,7 +161,7 @@ PDF
 - 是否在 CLI 增加兼容短别名？（首版不做）
 - TokenCounter 何时切换到 DeepSeek 官方 exact tokenizer？
 
-已关闭：包/CLI 名 → `solivagus`（ADR-001）；Python → 3.11 基线 / 推荐 3.12 + uv；模型 → OAI-compatible 抽象 + 仅 `deepseek-v4-flash`；批目录惯例 → `D:\PDFS`；样例不入库 → `example/`；MVP 归档 → `legacy/`；preflight → pypdfium2；Phase 2 GPU OCR（F1）→ 已验收；Phase 3 规划替换 OCR 字符种子 units → 已实现。
+已关闭：包/CLI 名 → `solivagus`（ADR-001）；Python → 3.11 基线 / 推荐 3.12 + uv；模型 → OAI-compatible 抽象 + 仅 `deepseek-v4-flash`；批目录惯例 → `D:\PDFS`；样例不入库 → `example/`；MVP 归档 → `legacy/`；preflight → pypdfium2；Phase 2 GPU OCR（F1）→ 已验收；Phase 3 规划替换 OCR 字符种子 units → 已实现；Phase 4 warm-up/probe/本地缓存 → 已实现；Phase 5 区内 asyncio 并发 + 429 自适应 → 已实现。
 
 # Citations
 

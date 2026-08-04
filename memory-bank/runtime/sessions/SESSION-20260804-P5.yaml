@@ -1,0 +1,17 @@
+coding_runtime_schema_version: '0.1'
+kind: coding_session
+snapshot_revision: 1
+session:
+  session_id: SESSION-20260804-P5
+  task_id: TASK-20260804-P5
+  repository:
+    workspace_id: WS-SOLIVAGUS
+    repository_id: REPO-SOLIVAGUS
+    repository_path: .
+    remote_url: https://github.com/Marz42/Solivagus.git
+  status: active
+  started_at: '2026-08-04T09:12:30.613963+08:00'
+  updated_at: '2026-08-04T09:12:30.613963+08:00'
+  ended_at: null
+  agent_id: cursor-agent
+  current_checkpoint_id: null
