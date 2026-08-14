@@ -60,6 +60,7 @@ def build_translation_units(
     *,
     budget: UnitBudget | None = None,
     count_fn=None,
+    estimate_output_fn=None,
 ) -> list[PlannedUnit]:
     """Pack nodes into units without splitting atomic protected nodes."""
     budget = budget or UnitBudget()
@@ -67,6 +68,8 @@ def build_translation_units(
         from solivagus.planning.tokenizer import approximate_token_count
 
         count_fn = approximate_token_count
+    if estimate_output_fn is None:
+        estimate_output_fn = lambda tokens: int(tokens * 1.3) + 512
 
     units: list[PlannedUnit] = []
     current: list[StructuralNode] = []
@@ -87,7 +90,7 @@ def build_translation_units(
                 source_text=text,
                 source_hash=sha256_text(text),
                 source_tokens=tokens,
-                estimated_output_tokens=int(tokens * 1.3) + 512,
+                estimated_output_tokens=int(estimate_output_fn(tokens)),
                 heading_path=current_path,
             )
         )

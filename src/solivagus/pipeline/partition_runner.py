@@ -19,7 +19,11 @@ from solivagus.database import Database
 from solivagus.models import UnitStatus
 from solivagus.pipeline.bisect import bisect_source_text
 from solivagus.pipeline.warmup import ProbeDecision, evaluate_probe, run_partition_warmup
-from solivagus.providers.async_openai import is_rate_limited_error
+from solivagus.providers.async_openai import (
+    backoff_sleep,
+    is_rate_limited_error,
+    is_service_unavailable_error,
+)
 from solivagus.providers.openai_compatible import (
     FatalProviderError,
     ProviderError,
@@ -120,8 +124,11 @@ async def _flat_translate_segment_async(
             except Exception as exc:  # noqa: BLE001
                 last_error = exc
                 if partition_gate is not None and is_rate_limited_error(exc):
-                    await partition_gate.record_rate_limit(adaptive=settings.adaptive_concurrency)
-                await asyncio.sleep(min(2 ** (attempt - 1), 8))
+                    kind = "503" if is_service_unavailable_error(exc) else "429"
+                    await partition_gate.record_rate_limit(
+                        adaptive=settings.adaptive_concurrency, kind=kind
+                    )
+                await backoff_sleep(attempt, exc)
         if last_error is not None:
             raise last_error
     return (
@@ -180,8 +187,11 @@ async def _kv_translate_unit_async(
         except Exception as exc:  # noqa: BLE001
             last_error = exc
             if partition_gate is not None and is_rate_limited_error(exc):
-                await partition_gate.record_rate_limit(adaptive=settings.adaptive_concurrency)
-            await asyncio.sleep(min(2 ** (attempt - 1), 8))
+                kind = "503" if is_service_unavailable_error(exc) else "429"
+                await partition_gate.record_rate_limit(
+                    adaptive=settings.adaptive_concurrency, kind=kind
+                )
+            await backoff_sleep(attempt, exc)
     assert last_error is not None
     raise last_error
 
@@ -261,8 +271,12 @@ async def translate_partition_async(
         usage_totals = {}
 
     cfg = _concurrency_config(settings)
-    global_gate = global_gate or ConcurrencyGate(cfg.global_limit)
-    document_gate = document_gate or ConcurrencyGate(cfg.per_document_limit)
+    global_gate = global_gate or ConcurrencyGate(
+        cfg.global_limit, maximum=cfg.max_global_limit
+    )
+    document_gate = document_gate or ConcurrencyGate(
+        cfg.per_document_limit, maximum=cfg.max_global_limit
+    )
     writer = DbWriter()
 
     capsule = style_capsule or empty_capsule()
@@ -311,7 +325,7 @@ async def translate_partition_async(
     assembled: list[dict[str, str]] = []
     pending_after_probe: list[Any] = []
     barrier_done = False
-    partition_gate = ConcurrencyGate(1)
+    partition_gate = ConcurrencyGate(1, maximum=cfg.max_global_limit)
 
     async def persist_success(
         *,
@@ -364,6 +378,22 @@ async def translate_partition_async(
                 "translation_text": translated_text,
             }
         )
+        # Brief §21.2: feed rolling output-ratio calibration from live usage.
+        if not from_cache and usage:
+            try:
+                from solivagus.planning.calibration import load_calibration, save_calibration
+                from solivagus.planning.tokenizer import approximate_token_count
+
+                src_tokens = int(unit["source_tokens"] or 0) or approximate_token_count(
+                    source_text
+                )
+                completion = int(usage.get("completion_tokens") or 0)
+                if src_tokens > 0 and completion > 0:
+                    cal = load_calibration(settings.workspace)
+                    cal.record(source_tokens=src_tokens, completion_tokens=completion)
+                    save_calibration(settings.workspace, cal)
+            except Exception:  # noqa: BLE001
+                pass
 
     async def persist_fallback(unit: Any, exc: Exception) -> None:
         nonlocal warnings
@@ -432,7 +462,7 @@ async def translate_partition_async(
                 usage_totals["local_cache_hits"] = usage_totals.get("local_cache_hits", 0) + 1
                 if is_probe:
                     limit = partition_limit_for_probe(decision.value, cfg)
-                    partition_gate = ConcurrencyGate(limit)
+                    partition_gate = ConcurrencyGate(limit, maximum=cfg.max_global_limit)
                     barrier_done = True
                 return str(cached["translation_text"]), {}, True
 
@@ -516,7 +546,7 @@ async def translate_partition_async(
                     rewarmed = True
                 # Warm-up barrier: open concurrency for remaining units.
                 limit = partition_limit_for_probe(decision.value, cfg)
-                partition_gate = ConcurrencyGate(limit)
+                partition_gate = ConcurrencyGate(limit, maximum=cfg.max_global_limit)
                 barrier_done = True
             return text, usage, False
 

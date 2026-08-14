@@ -14,7 +14,7 @@
 - `references_mode` 扩展模式收缩为暂缓（ADR-002）；生产默认 `keep`。
 
 ### Added
-- ADR-002：Phase 8 后 brief 差距修复优先级。
+- ADR-002 后续：输出比例滚动校准、`inspect-data`、并发硬上限 + Retry-After / 503−25%。
 - `--config` YAML 加载（`config_loader.py`）作为可复现配置入口。
 - TokenCounter：优先 `deepseek-tokenizer` / 本地 tokenizer 文件，否则近似。
 - Unit 二分重试（§19.2）：失败后先拆半再英文回退。

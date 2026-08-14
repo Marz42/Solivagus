@@ -50,7 +50,7 @@ paradigma:
 | `solivagus plan <pdf>` | 只规划 Unit/Partition 与费用估计，不翻译 |
 | `solivagus status [pdf]` | 工作区或单文档状态 |
 | `solivagus retry <pdf>\|--all-failed` | 重试失败项 |
-| `solivagus inspect <pdf>` | 诊断；可 `--unit` |
+| `solivagus inspect-data [pdf]` | 隐私审计：显示将发往 API 的文本范围（不联网） |
 | `solivagus report <pdf>` | QA / usage 报告视图 |
 | `solivagus inspect-data <pdf>` | 显示将发送给 API 的数据范围（隐私审计） |
 

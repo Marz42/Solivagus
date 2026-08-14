@@ -160,7 +160,7 @@ PDF
 - DeepSeek 价格 profile 的更新频率与告警阈值？
 - 是否在 CLI 增加兼容短别名？（首版不做）
 
-已关闭：包/CLI 名 → `solivagus`（ADR-001）；Python → 3.11 基线 / 推荐 3.12 + uv；模型 → OAI-compatible 抽象 + 仅 `deepseek-v4-flash`；批目录 → 可配置（无 `D:\PDFS` 硬编码默认）；样例不入库 → `example/`；MVP 归档 → `legacy/`；preflight → pypdfium2；Phase 2–8 主链路 → 已实现；ADR-002 差距修复（脚注默认保留、`--config` YAML、exact tokenizer 路径、Unit 二分、文档 manifest）→ 已落地；TokenCounter exact 路径 → 可选 `deepseek-tokenizer` / `SOLIVAGUS_TOKENIZER_FILE`（近似回退保留）。待续：输出比例校准、`inspect-data`、并发 Retry-After/硬上限细节。
+已关闭：包/CLI 名 → `solivagus`（ADR-001）；Python → 3.11 基线 / 推荐 3.12 + uv；模型 → OAI-compatible 抽象 + 仅 `deepseek-v4-flash`；批目录 → 可配置（无 `D:\PDFS` 硬编码默认）；样例不入库 → `example/`；MVP 归档 → `legacy/`；preflight → pypdfium2；Phase 2–8 主链路 → 已实现；ADR-002 差距修复（脚注默认保留、`--config` YAML、exact tokenizer 路径、Unit 二分、文档 manifest）→ 已落地；TokenCounter exact 路径 → 可选 `deepseek-tokenizer` / `SOLIVAGUS_TOKENIZER_FILE`（近似回退保留）。待续：可选 p95 延迟门禁；生产批目录浸泡。
 
 # Citations
 

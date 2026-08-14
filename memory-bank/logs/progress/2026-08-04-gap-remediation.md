@@ -2,20 +2,19 @@
 
 ## Adopted priority
 
-| Gap | Priority | Status this session |
-|-----|----------|---------------------|
+| Gap | Priority | Status |
+|-----|----------|--------|
 | footnote/aside default (split flags) | P0 | done |
 | YAML / `--config` | P0 | done |
 | real Tokenizer | P0/P1 | done (optional dep + env paths; approx fallback) |
 | Unit bisect | P0/P1 | done (one-level bisect before fallback) |
-| manifest.json stable | P1 | done |
-| output-ratio calibration | P1 | pending |
-| inspect-data minimal | P1/P2 | pending |
-| adaptive concurrency (cap + Retry-After) | P2 | pending |
-| references_mode expand | deferred | keep-only commitment |
+| `manifest.json` stable | P1 | done |
+| output-ratio calibration | P1 | done (rolling P90 after 5 samples) |
+| `inspect-data` minimal | P1/P2 | done (`solivagus inspect-data`) |
+| adaptive concurrency (cap + Retry-After) | P2 | done (max cap, 429/503, Retry-After sleep; p95 deferred) |
+| `references_mode` expand | deferred | keep-only commitment |
 
 ## Next
 
-- P1: rolling output-ratio calibration
-- P1/P2: `inspect-data`
-- P2: concurrency hard-cap + Retry-After
+- Optional: p95 latency gate for concurrency bump
+- Production soak on real batch directory

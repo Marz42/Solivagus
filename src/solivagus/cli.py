@@ -163,6 +163,33 @@ def inspect_cmd(
             typer.echo(f"  ... {len(units) - 30} more")
 
 
+@app.command("inspect-data")
+def inspect_data_cmd(
+    ctx: typer.Context,
+    pdf: Optional[Path] = typer.Argument(None, help="PDF path or omit for latest document"),
+    sample: int = typer.Option(5, "--sample", help="How many units to preview"),
+    json_out: bool = typer.Option(False, "--json", help="Emit JSON instead of text"),
+) -> None:
+    """Show what would be sent to the API (no network). Privacy audit helper."""
+    from solivagus.pipeline.inspect_data import (
+        build_inspect_data_report,
+        format_inspect_data_report,
+    )
+
+    settings = ctx.obj["settings"]
+    with _open_db(settings.workspace) as db:
+        doc_id, _row = _resolve_document(db, pdf)
+        report = build_inspect_data_report(
+            db, document_id=doc_id, settings=settings, sample_limit=sample
+        )
+    if json_out:
+        import json
+
+        typer.echo(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
+    else:
+        typer.echo(format_inspect_data_report(report).rstrip())
+
+
 @app.command("import-mvp")
 def import_mvp_cmd(
     ctx: typer.Context,

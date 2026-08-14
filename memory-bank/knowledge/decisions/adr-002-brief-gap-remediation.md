@@ -73,7 +73,7 @@ Phase 0–8 主链路落地后，对照 `project-brief/project-brief.md` 自检�
 
 # Status
 
-Accepted — 2026-08-04（P0 + P1 manifest/tokenizer/bisect 已实施；校准/inspect-data/并发细节待续）
+Accepted — 2026-08-04（P0–P2 表内项已落地；p95 延迟门禁仍延期）
 
 # Related Documents
 

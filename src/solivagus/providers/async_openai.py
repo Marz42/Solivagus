@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import random
 from typing import Any
 
 import httpx
@@ -12,6 +14,7 @@ from solivagus.providers.openai_compatible import (
     ProviderError,
     build_chat_endpoint,
     parse_chat_response,
+    parse_retry_after,
 )
 
 
@@ -60,9 +63,10 @@ async def call_chat_api_async(
         body = response.text
         if http_status >= 400:
             detail = body[:800]
+            retry_after = parse_retry_after(response.headers.get("Retry-After"))
             if http_status in {400, 401, 402, 403, 404, 413, 422}:
                 raise FatalProviderError(f"HTTP {http_status}: {detail}")
-            raise ProviderError(f"HTTP {http_status}: {detail}")
+            raise ProviderError(f"HTTP {http_status}: {detail}", retry_after=retry_after)
         parsed = response.json()
     except httpx.HTTPError as exc:
         raise ProviderError(f"network error: {exc}") from exc
@@ -78,6 +82,25 @@ async def call_chat_api_async(
     return text, finish_reason, usage
 
 
+async def backoff_sleep(attempt: int, exc: BaseException | None = None) -> None:
+    """Prefer Retry-After; else exponential backoff + small jitter (brief §19.2)."""
+    ra = retry_after_seconds(exc) if exc is not None else None
+    if ra is not None and ra > 0:
+        delay = float(ra) + random.uniform(0.0, 0.5)
+    else:
+        delay = min(2 ** max(0, attempt - 1), 8) + random.uniform(0.0, 0.25)
+    await asyncio.sleep(delay)
+
+
 def is_rate_limited_error(exc: BaseException) -> bool:
     text = str(exc).lower()
     return "http 429" in text or "insufficient_system_resource" in text or "http 503" in text
+
+
+def is_service_unavailable_error(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    return "http 503" in text or "insufficient_system_resource" in text
+
+
+def retry_after_seconds(exc: BaseException) -> float | None:
+    return getattr(exc, "retry_after", None)

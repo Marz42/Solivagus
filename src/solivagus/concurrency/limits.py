@@ -1,4 +1,4 @@
-"""Async concurrency gates with adaptive 429 backoff."""
+"""Async concurrency gates with adaptive 429/503 backoff."""
 
 from __future__ import annotations
 
@@ -17,11 +17,18 @@ class ConcurrencyConfig:
 
 
 class ConcurrencyGate:
-    """Dynamic concurrency limit; `halve()` shrinks the limit after 429."""
+    """Dynamic concurrency limit with hard max and 429/503 backoff."""
 
-    def __init__(self, limit: int, *, minimum: int = 1) -> None:
-        self._limit = max(minimum, limit)
-        self._minimum = minimum
+    def __init__(
+        self,
+        limit: int,
+        *,
+        minimum: int = 1,
+        maximum: int | None = None,
+    ) -> None:
+        self._minimum = max(1, minimum)
+        self._maximum = max(self._minimum, maximum if maximum is not None else max(limit, 1))
+        self._limit = max(self._minimum, min(int(limit), self._maximum))
         self._active = 0
         self._condition = asyncio.Condition()
         self.success_streak = 0
@@ -29,6 +36,10 @@ class ConcurrencyGate:
     @property
     def limit(self) -> int:
         return self._limit
+
+    @property
+    def maximum(self) -> int:
+        return self._maximum
 
     async def acquire(self) -> None:
         async with self._condition:
@@ -48,14 +59,24 @@ class ConcurrencyGate:
             self.success_streak += 1
             if self.success_streak >= bump_every:
                 self.success_streak = 0
-                self._limit += 2
+                self._limit = min(self._maximum, self._limit + 2)
                 self._condition.notify_all()
 
-    async def record_rate_limit(self, *, adaptive: bool) -> None:
+    async def record_rate_limit(
+        self,
+        *,
+        adaptive: bool,
+        kind: str = "429",
+    ) -> None:
+        """Shrink limit: 429 → half; 503 / resource → −25% (brief §18.4)."""
         async with self._condition:
             self.success_streak = 0
             if adaptive:
-                self._limit = max(self._minimum, self._limit // 2)
+                if kind == "503":
+                    reduced = max(self._minimum, int(self._limit * 0.75))
+                    self._limit = max(self._minimum, reduced)
+                else:
+                    self._limit = max(self._minimum, self._limit // 2)
             self._condition.notify_all()
 
 

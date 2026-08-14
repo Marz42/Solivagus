@@ -81,7 +81,10 @@ def run_plan_stage(
         translation_status="planning",
     )
 
-    plan = plan_from_markdown(markdown, config)
+    from solivagus.planning.calibration import load_calibration
+
+    calibration = load_calibration(settings.workspace)
+    plan = plan_from_markdown(markdown, config, calibration=calibration)
     report = write_plan_artifacts(artifact_dir, plan)
 
     node_rows = [

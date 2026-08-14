@@ -43,11 +43,20 @@ class PlanResult:
     source_tokens: int
 
 
-def plan_from_markdown(markdown: str, config: PlanningConfig | None = None) -> PlanResult:
+def plan_from_markdown(
+    markdown: str,
+    config: PlanningConfig | None = None,
+    *,
+    calibration: Any | None = None,
+) -> PlanResult:
     config = config or PlanningConfig()
     nodes = parse_markdown_structure(markdown)
     counter = TokenCounter()
     token_mode = annotate_node_tokens(nodes, counter)
+    if calibration is not None:
+        estimate_output_fn = calibration.estimate_output_tokens
+    else:
+        estimate_output_fn = None
     units = build_translation_units(
         nodes,
         budget=UnitBudget(
@@ -56,6 +65,7 @@ def plan_from_markdown(markdown: str, config: PlanningConfig | None = None) -> P
             min_tokens=config.unit_min_tokens,
         ),
         count_fn=lambda text: counter.count(text).tokens,
+        estimate_output_fn=estimate_output_fn,
     )
     partitions = build_cache_partitions(
         units,

@@ -8,11 +8,29 @@ from urllib import error, request
 
 
 class ProviderError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, retry_after: float | None = None) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
 
 
 class FatalProviderError(ProviderError):
     pass
+
+
+def parse_retry_after(header_value: str | None) -> float | None:
+    """Parse Retry-After as seconds (delta-seconds only; HTTP-date ignored)."""
+    if not header_value:
+        return None
+    text = str(header_value).strip()
+    if not text:
+        return None
+    try:
+        seconds = float(text)
+    except ValueError:
+        return None
+    if seconds < 0 or seconds != seconds:  # NaN
+        return None
+    return min(seconds, 300.0)
 
 
 SYSTEM_PROMPT = (
@@ -124,9 +142,12 @@ def call_chat_api(
             http_status = getattr(resp, "status", 200)
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
+        retry_after = parse_retry_after(exc.headers.get("Retry-After") if exc.headers else None)
         if exc.code in {400, 401, 402, 403, 404, 413, 422}:
             raise FatalProviderError(f"HTTP {exc.code}: {detail[:800]}") from exc
-        raise ProviderError(f"HTTP {exc.code}: {detail[:800]}") from exc
+        raise ProviderError(
+            f"HTTP {exc.code}: {detail[:800]}", retry_after=retry_after
+        ) from exc
     except error.URLError as exc:
         raise ProviderError(f"network error: {exc}") from exc
 

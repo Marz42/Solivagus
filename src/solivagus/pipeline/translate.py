@@ -280,8 +280,12 @@ def run_translate_stage(
     skipped = 0
     warnings = 0
     probe_summaries: list[dict[str, Any]] = []
-    global_gate = ConcurrencyGate(settings.global_concurrency)
-    document_gate = ConcurrencyGate(settings.per_document_concurrency)
+    global_gate = ConcurrencyGate(
+        settings.global_concurrency, maximum=settings.max_global_concurrency
+    )
+    document_gate = ConcurrencyGate(
+        settings.per_document_concurrency, maximum=settings.max_global_concurrency
+    )
     latest_row = db.get_latest_style_capsule(document_id)
     capsule: StyleCapsule = (
         StyleCapsule.from_db_row(latest_row) if latest_row is not None else empty_capsule()
