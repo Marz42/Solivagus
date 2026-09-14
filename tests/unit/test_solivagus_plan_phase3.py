@@ -83,11 +83,25 @@ class PlanningTests(unittest.TestCase):
         plan_a = plan_from_markdown(SAMPLE_MD, PlanningConfig())
         plan_b = plan_from_markdown(SAMPLE_MD, PlanningConfig())
         self.assertEqual(plan_a.config_hash, plan_b.config_hash)
+        self.assertEqual(plan_a.input_hash, plan_b.input_hash)
         self.assertEqual(
             [u.source_hash for u in plan_a.units],
             [u.source_hash for u in plan_b.units],
         )
         self.assertEqual(plan_a.token_mode, TokenMode.APPROXIMATE.value)
+
+    def test_plan_input_hash_includes_calibration(self) -> None:
+        from solivagus.planning.calibration import OutputCalibration
+
+        cal = OutputCalibration()
+        for ratio in (1.0, 1.2, 1.4, 1.6, 2.0):
+            cal.record(source_tokens=100, completion_tokens=int(ratio * 100))
+        plan_default = plan_from_markdown(SAMPLE_MD, PlanningConfig())
+        plan_cal = plan_from_markdown(SAMPLE_MD, PlanningConfig(), calibration=cal)
+        self.assertEqual(plan_default.config_hash, plan_cal.config_hash)
+        self.assertNotEqual(plan_default.input_hash, plan_cal.input_hash)
+        self.assertIsNotNone(plan_cal.calibration)
+        self.assertEqual(plan_cal.calibration["sample_count"], 5)
 
     def test_partition_first_budget(self) -> None:
         # Build many tiny units and ensure first partition prefers 96k target semantics

@@ -14,6 +14,7 @@ from solivagus.batch.discover import discover_pdfs, resolve_batch_dir
 from solivagus.batch.manifest import write_batch_manifest
 from solivagus.batch.profiles import BatchProfile, apply_profile
 from solivagus.batch.usage import aggregate_usage_reports
+from solivagus.concurrency.limits import ThreadSafeGate
 from solivagus.config import Settings
 from solivagus.database import Database
 from solivagus.models import DocumentStatus
@@ -64,11 +65,18 @@ def _run_translate_pipeline(
     translate_fn: TranslateFn,
     qa_fn: QaFn,
     skip_plan: bool = False,
+    global_gate: Any = None,
 ) -> dict[str, Any]:
     results: dict[str, Any] = {}
     if not skip_plan:
         results["plan"] = plan_fn(db, document_id=document_id, settings=settings)
-    results["translate"] = translate_fn(db, document_id=document_id, settings=settings)
+    translate_kwargs: dict[str, Any] = {
+        "document_id": document_id,
+        "settings": settings,
+    }
+    if global_gate is not None:
+        translate_kwargs["global_gate"] = global_gate
+    results["translate"] = translate_fn(db, **translate_kwargs)
     results["qa"] = qa_fn(db, document_id=document_id, settings=settings, force=True)
     return results
 
@@ -140,6 +148,10 @@ def run_batch(
     stop_translate = Event()
     ocr_done_count = 0
     ocr_total = len(jobs)
+    batch_global_gate = ThreadSafeGate(
+        settings.global_concurrency,
+        maximum=settings.max_global_concurrency,
+    )
 
     ws_root = workspace_root(settings.workspace)
     ensure_workspace(settings.workspace)
@@ -238,6 +250,7 @@ def run_batch(
                     plan_fn=plan_impl,
                     translate_fn=translate_impl,
                     qa_fn=qa_impl,
+                    global_gate=batch_global_gate,
                 )
             mark(
                 job,

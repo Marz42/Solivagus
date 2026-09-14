@@ -8,10 +8,18 @@
 
 ## [Unreleased]
 
+### Fixed
+- CI 安装改为 `pip install ".[dev]"`；`pyproject`/`solivagus.__version__` 与根 `VERSION` 对齐。
+- 单文档多 Partition 共用一个事件循环，避免跨 loop 复用 `ConcurrencyGate`。
+- Batch Supervisor 持有 `ThreadSafeGate` 作为批级 global gate。
+- 二分重试重新进入 `NestedGates`；校准写入加进程+文件锁并按 model/语言/tokenizer 分桶。
+- Plan 幂等哈希纳入校准指纹；`inspect-data` 按 Partition 输出请求清单，修复 `--sample 0`。
+
 ### Changed
 - 批处理 PDF 根目录：`Settings.batch_dir` 默认改为 `null`；通过 `SOLIVAGUS_BATCH_DIR`、配置或 CLI 显式指定，不再默认 `D:\PDFS`。
 - OCR §9.5：默认保留 footnote/aside；`--drop-footnotes` / `--drop-aside-text` 拆开丢弃。
 - `references_mode` 扩展模式收缩为暂缓（ADR-002）；生产默认 `keep`。
+- ADR-002：明确生产浸泡前仍不可关闭（见 known-issue `production-gate-concurrency-ci`）。
 
 ### Added
 - ADR-002 后续：输出比例滚动校准、`inspect-data`、并发硬上限 + Retry-After / 503−25%。

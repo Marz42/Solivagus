@@ -10,6 +10,7 @@ from solivagus.cache.local import load_translation, store_translation, translati
 from solivagus.concurrency.limits import (
     ConcurrencyConfig,
     ConcurrencyGate,
+    Gate,
     NestedGates,
     partition_limit_for_probe,
 )
@@ -77,7 +78,7 @@ async def _flat_translate_segment_async(
     glossary: str,
     chat_fn: ChatFn,
     user_id: str | None,
-    partition_gate: ConcurrencyGate | None = None,
+    partition_gate: Gate | None = None,
 ) -> tuple[str, dict[str, Any]]:
     segments = split_passthrough_segments(text)
     output_parts: list[str] = []
@@ -147,7 +148,7 @@ async def _kv_translate_unit_async(
     stable_user: str,
     warmup_assistant: str,
     user_id: str,
-    partition_gate: ConcurrencyGate | None = None,
+    partition_gate: Gate | None = None,
 ) -> tuple[str, dict[str, Any]]:
     protected, placeholders = protect_markdown(source_text)
     messages = build_unit_messages(
@@ -219,10 +220,11 @@ def translate_partition(
     force: bool = False,
     strict: bool = False,
     usage_totals: dict[str, int] | None = None,
-    global_gate: ConcurrencyGate | None = None,
-    document_gate: ConcurrencyGate | None = None,
+    global_gate: Gate | None = None,
+    document_gate: Gate | None = None,
     style_capsule: StyleCapsule | None = None,
 ) -> dict[str, Any]:
+    """Compatibility wrapper; prefer a single document-level asyncio.run()."""
     return asyncio.run(
         translate_partition_async(
             db,
@@ -260,8 +262,8 @@ async def translate_partition_async(
     force: bool = False,
     strict: bool = False,
     usage_totals: dict[str, int] | None = None,
-    global_gate: ConcurrencyGate | None = None,
-    document_gate: ConcurrencyGate | None = None,
+    global_gate: Gate | None = None,
+    document_gate: Gate | None = None,
     style_capsule: StyleCapsule | None = None,
 ) -> dict[str, Any]:
     del document_id
@@ -381,18 +383,24 @@ async def translate_partition_async(
         # Brief §21.2: feed rolling output-ratio calibration from live usage.
         if not from_cache and usage:
             try:
-                from solivagus.planning.calibration import load_calibration, save_calibration
-                from solivagus.planning.tokenizer import approximate_token_count
+                from solivagus.planning.calibration import record_calibration_sample
+                from solivagus.planning.tokenizer import TokenCounter, approximate_token_count
 
                 src_tokens = int(unit["source_tokens"] or 0) or approximate_token_count(
                     source_text
                 )
                 completion = int(usage.get("completion_tokens") or 0)
                 if src_tokens > 0 and completion > 0:
-                    cal = load_calibration(settings.workspace)
-                    cal.record(source_tokens=src_tokens, completion_tokens=completion)
-                    save_calibration(settings.workspace, cal)
+                    record_calibration_sample(
+                        settings.workspace,
+                        source_tokens=src_tokens,
+                        completion_tokens=completion,
+                        model=settings.llm_model,
+                        target_language=settings.target_language,
+                        tokenizer_mode=TokenCounter().mode.value,
+                    )
             except Exception:  # noqa: BLE001
+                # Calibration must never fail a document; swallow after best-effort write.
                 pass
 
     async def persist_fallback(unit: Any, exc: Exception) -> None:
@@ -589,29 +597,29 @@ async def translate_partition_async(
             max_depth = max(0, int(settings.unit_bisect_max_depth))
             if halves and max_depth > 0 and not is_probe:
                 left_src, right_src = halves
+
+                async def _bisect_half(half_key: str, half_src: str) -> tuple[str, dict[str, Any]]:
+                    async def _call() -> tuple[str, dict[str, Any]]:
+                        return await _kv_translate_unit_async(
+                            unit_key=half_key,
+                            source_text=half_src,
+                            settings=settings,
+                            chat_fn=chat_fn,
+                            stable_system=stable_system,
+                            stable_user=stable_user,
+                            warmup_assistant=warmup.warmup_assistant,
+                            user_id=user_id,
+                            partition_gate=partition_gate,
+                        )
+
+                    if under_gates:
+                        async with NestedGates(global_gate, document_gate, partition_gate):
+                            return await _call()
+                    return await _call()
+
                 try:
-                    left_text, left_usage = await _kv_translate_unit_async(
-                        unit_key=f"{unit_key}:a",
-                        source_text=left_src,
-                        settings=settings,
-                        chat_fn=chat_fn,
-                        stable_system=stable_system,
-                        stable_user=stable_user,
-                        warmup_assistant=warmup.warmup_assistant,
-                        user_id=user_id,
-                        partition_gate=partition_gate if under_gates else None,
-                    )
-                    right_text, right_usage = await _kv_translate_unit_async(
-                        unit_key=f"{unit_key}:b",
-                        source_text=right_src,
-                        settings=settings,
-                        chat_fn=chat_fn,
-                        stable_system=stable_system,
-                        stable_user=stable_user,
-                        warmup_assistant=warmup.warmup_assistant,
-                        user_id=user_id,
-                        partition_gate=partition_gate if under_gates else None,
-                    )
+                    left_text, left_usage = await _bisect_half(f"{unit_key}:a", left_src)
+                    right_text, right_usage = await _bisect_half(f"{unit_key}:b", right_src)
                     combined = (left_text.rstrip() + "\n\n" + right_text.lstrip()).rstrip() + "\n"
                     merged_usage = dict(left_usage or {})
                     for key in (

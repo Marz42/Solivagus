@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from pathlib import Path
 from typing import Any, Callable
 
 from solivagus.assembly import assemble_outputs
-from solivagus.concurrency.limits import ConcurrencyGate
+from solivagus.concurrency.limits import ConcurrencyGate, Gate
 from solivagus.config import Settings
 from solivagus.database import Database
 from solivagus.models import DocumentStatus, UnitStatus
-from solivagus.pipeline.partition_runner import translate_partition
+from solivagus.pipeline.partition_runner import translate_partition_async
 from solivagus.providers.openai_compatible import (
     FatalProviderError,
     ProviderError,
@@ -31,6 +32,162 @@ from solivagus.workspace import translation_cache_root
 
 
 ChatFn = Callable[..., tuple[str, str | None, dict[str, Any]]]
+
+
+async def _translate_all_partitions_async(
+    db: Database,
+    *,
+    document_id: int,
+    doc: Any,
+    partitions: list[Any],
+    units_by_partition: dict[int | None, list[Any]],
+    settings: Settings,
+    artifact_dir: Path,
+    cache_root: Path,
+    chat: ChatFn,
+    force: bool,
+    strict: bool,
+    usage_totals: dict[str, int],
+    document_title: str,
+    capsule: StyleCapsule,
+    capsule_dir: Path,
+    shared_global_gate: Gate | None,
+) -> tuple[int, int, int, list[dict[str, str]], list[dict[str, Any]]]:
+    """Run every partition on one event loop so asyncio gates stay valid."""
+    global_gate: Gate = shared_global_gate or ConcurrencyGate(
+        settings.global_concurrency, maximum=settings.max_global_concurrency
+    )
+    document_gate = ConcurrencyGate(
+        settings.per_document_concurrency, maximum=settings.max_global_concurrency
+    )
+    translated_count = 0
+    skipped = 0
+    warnings = 0
+    assembled: list[dict[str, str]] = []
+    probe_summaries: list[dict[str, Any]] = []
+
+    for partition in partitions:
+        part_id = int(partition["id"])
+        part_units = units_by_partition.get(part_id, [])
+        if not part_units:
+            continue
+        result = await translate_partition_async(
+            db,
+            document_id=document_id,
+            source_sha256=str(doc["source_sha256"]),
+            document_title=document_title,
+            partition=partition,
+            units=part_units,
+            settings=settings,
+            artifact_dir=artifact_dir,
+            cache_root=cache_root,
+            chat_fn=chat,
+            force=force,
+            strict=strict,
+            usage_totals=usage_totals,
+            global_gate=global_gate,
+            document_gate=document_gate,
+            style_capsule=capsule,
+        )
+        translated_count += int(result["translated"])
+        skipped += int(result["skipped"])
+        warnings += int(result["warnings"])
+        assembled.extend(result["assembled"])
+        probe_summaries.append(
+            {
+                "partition_id": part_id,
+                "sequence_index": partition["sequence_index"],
+                "probe_decision": result["probe_decision"],
+                "probe_hit_tokens": result["probe_hit_tokens"],
+                "probe_ratio": result["probe_ratio"],
+                "re_probed": result["re_probed"],
+                "partition_concurrency": result.get("partition_concurrency"),
+                "style_capsule_version": result.get("style_capsule_version"),
+                "rewarmed": result.get("rewarmed"),
+            }
+        )
+        # Freeze next capsule at partition boundary for subsequent partitions.
+        next_capsule = build_next_capsule(
+            result.get("style_capsule") or capsule,
+            result["assembled"],
+        )
+        fields = next_capsule.to_db_fields()
+        db.insert_style_capsule(
+            document_id,
+            version=int(fields["version"]),
+            rules_json=str(fields["rules_json"]),
+            terminology_json=str(fields["terminology_json"]),
+            examples_json=str(fields["examples_json"]),
+            boundary_context_json=str(fields["boundary_context_json"]),
+            content_hash=str(fields["content_hash"]),
+            source_partition_id=part_id,
+        )
+        capsule_path = capsule_dir / f"v{next_capsule.version}.json"
+        atomic_write_json(
+            capsule_path,
+            {
+                "version": next_capsule.version,
+                "style_rules": next_capsule.style_rules,
+                "terminology": next_capsule.terminology,
+                "examples": next_capsule.examples,
+                "boundary_context": next_capsule.boundary_context,
+                "content_hash": next_capsule.content_hash(),
+                "source_partition_id": part_id,
+            },
+        )
+        db.record_artifact(
+            document_id,
+            "style_capsule",
+            str(capsule_path),
+            next_capsule.content_hash(),
+        )
+        db.commit()
+        capsule = next_capsule
+
+    return translated_count, skipped, warnings, assembled, probe_summaries
+
+
+def _run_partitions(
+    db: Database,
+    *,
+    document_id: int,
+    doc: Any,
+    units: list[Any],
+    partitions: list[Any],
+    units_by_partition: dict[int | None, list[Any]],
+    settings: Settings,
+    artifact_dir: Path,
+    cache_root: Path,
+    chat: ChatFn,
+    force: bool,
+    strict: bool,
+    usage_totals: dict[str, int],
+    document_title: str,
+    capsule: StyleCapsule,
+    capsule_dir: Path,
+    shared_global_gate: Gate | None,
+) -> tuple[int, int, int, list[dict[str, str]], list[dict[str, Any]]]:
+    del units  # ordering restored by caller via sequence_index
+    return asyncio.run(
+        _translate_all_partitions_async(
+            db,
+            document_id=document_id,
+            doc=doc,
+            partitions=partitions,
+            units_by_partition=units_by_partition,
+            settings=settings,
+            artifact_dir=artifact_dir,
+            cache_root=cache_root,
+            chat=chat,
+            force=force,
+            strict=strict,
+            usage_totals=usage_totals,
+            document_title=document_title,
+            capsule=capsule,
+            capsule_dir=capsule_dir,
+            shared_global_gate=shared_global_gate,
+        )
+    )
 
 
 def _legacy_translate_text_segment(
@@ -239,6 +396,7 @@ def run_translate_stage(
     force: bool = False,
     strict: bool = False,
     chat_fn: ChatFn | None = None,
+    global_gate: Gate | None = None,
 ) -> dict[str, Any]:
     doc = db.fetchone("SELECT * FROM documents WHERE id = ?", (document_id,))
     if doc is None:
@@ -280,12 +438,6 @@ def run_translate_stage(
     skipped = 0
     warnings = 0
     probe_summaries: list[dict[str, Any]] = []
-    global_gate = ConcurrencyGate(
-        settings.global_concurrency, maximum=settings.max_global_concurrency
-    )
-    document_gate = ConcurrencyGate(
-        settings.per_document_concurrency, maximum=settings.max_global_concurrency
-    )
     latest_row = db.get_latest_style_capsule(document_id)
     capsule: StyleCapsule = (
         StyleCapsule.from_db_row(latest_row) if latest_row is not None else empty_capsule()
@@ -299,83 +451,25 @@ def run_translate_stage(
         units_by_partition.setdefault(int(pid) if pid is not None else None, []).append(unit)
 
     try:
-        for partition in partitions:
-            part_id = int(partition["id"])
-            part_units = units_by_partition.get(part_id, [])
-            if not part_units:
-                continue
-            result = translate_partition(
-                db,
-                document_id=document_id,
-                source_sha256=str(doc["source_sha256"]),
-                document_title=document_title,
-                partition=partition,
-                units=part_units,
-                settings=settings,
-                artifact_dir=artifact_dir,
-                cache_root=cache_root,
-                chat_fn=chat,
-                force=force,
-                strict=strict,
-                usage_totals=usage_totals,
-                global_gate=global_gate,
-                document_gate=document_gate,
-                style_capsule=capsule,
-            )
-            translated_count += int(result["translated"])
-            skipped += int(result["skipped"])
-            warnings += int(result["warnings"])
-            assembled.extend(result["assembled"])
-            probe_summaries.append(
-                {
-                    "partition_id": part_id,
-                    "sequence_index": partition["sequence_index"],
-                    "probe_decision": result["probe_decision"],
-                    "probe_hit_tokens": result["probe_hit_tokens"],
-                    "probe_ratio": result["probe_ratio"],
-                    "re_probed": result["re_probed"],
-                    "partition_concurrency": result.get("partition_concurrency"),
-                    "style_capsule_version": result.get("style_capsule_version"),
-                    "rewarmed": result.get("rewarmed"),
-                }
-            )
-            # Freeze next capsule at partition boundary for subsequent partitions.
-            next_capsule = build_next_capsule(
-                result.get("style_capsule") or capsule,
-                result["assembled"],
-            )
-            fields = next_capsule.to_db_fields()
-            db.insert_style_capsule(
-                document_id,
-                version=int(fields["version"]),
-                rules_json=str(fields["rules_json"]),
-                terminology_json=str(fields["terminology_json"]),
-                examples_json=str(fields["examples_json"]),
-                boundary_context_json=str(fields["boundary_context_json"]),
-                content_hash=str(fields["content_hash"]),
-                source_partition_id=part_id,
-            )
-            capsule_path = capsule_dir / f"v{next_capsule.version}.json"
-            atomic_write_json(
-                capsule_path,
-                {
-                    "version": next_capsule.version,
-                    "style_rules": next_capsule.style_rules,
-                    "terminology": next_capsule.terminology,
-                    "examples": next_capsule.examples,
-                    "boundary_context": next_capsule.boundary_context,
-                    "content_hash": next_capsule.content_hash(),
-                    "source_partition_id": part_id,
-                },
-            )
-            db.record_artifact(
-                document_id,
-                "style_capsule",
-                str(capsule_path),
-                next_capsule.content_hash(),
-            )
-            db.commit()
-            capsule = next_capsule
+        translated_count, skipped, warnings, assembled, probe_summaries = _run_partitions(
+            db,
+            document_id=document_id,
+            doc=doc,
+            units=units,
+            partitions=partitions,
+            units_by_partition=units_by_partition,
+            settings=settings,
+            artifact_dir=artifact_dir,
+            cache_root=cache_root,
+            chat=chat,
+            force=force,
+            strict=strict,
+            usage_totals=usage_totals,
+            document_title=document_title,
+            capsule=capsule,
+            capsule_dir=capsule_dir,
+            shared_global_gate=global_gate,
+        )
     except FatalProviderError:
         db.update_document_status(
             document_id,

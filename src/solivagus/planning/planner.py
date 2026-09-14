@@ -31,6 +31,18 @@ class PlanningConfig:
         payload = json.dumps(asdict(self), sort_keys=True)
         return sha256_text(payload)[:16]
 
+    def input_hash(self, calibration_fingerprint: dict[str, Any] | None = None) -> str:
+        payload = {
+            "config_hash": self.config_hash(),
+            "calibration": calibration_fingerprint or {
+                "schema": 2,
+                "bucket": "none",
+                "sample_count": 0,
+                "rolling_p90": None,
+            },
+        }
+        return sha256_text(json.dumps(payload, sort_keys=True, default=str))[:16]
+
 
 @dataclass
 class PlanResult:
@@ -41,6 +53,8 @@ class PlanResult:
     token_mode: str
     config_hash: str
     source_tokens: int
+    input_hash: str = ""
+    calibration: dict[str, Any] | None = None
 
 
 def plan_from_markdown(
@@ -86,14 +100,20 @@ def plan_from_markdown(
         mode=token_mode.value,
     )
     source_tokens = sum(n.token_count for n in nodes)
+    cal_fp = None
+    if calibration is not None and hasattr(calibration, "fingerprint"):
+        cal_fp = calibration.fingerprint()
+    config_hash = config.config_hash()
     return PlanResult(
         nodes=nodes,
         units=units,
         partitions=partitions,
         cost=cost,
         token_mode=token_mode.value,
-        config_hash=config.config_hash(),
+        config_hash=config_hash,
         source_tokens=source_tokens,
+        input_hash=config.input_hash(cal_fp),
+        calibration=cal_fp,
     )
 
 
@@ -128,6 +148,8 @@ def write_plan_artifacts(artifact_dir: Path, plan: PlanResult) -> dict[str, Any]
 
     report = {
         "config_hash": plan.config_hash,
+        "input_hash": getattr(plan, "input_hash", plan.config_hash),
+        "calibration": getattr(plan, "calibration", None),
         "token_mode": plan.token_mode,
         "source_tokens": plan.source_tokens,
         "unit_count": len(plan.units),

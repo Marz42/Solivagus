@@ -55,6 +55,30 @@ class CalibrationTests(unittest.TestCase):
             self.assertEqual(loaded.sample_count, 5)
             self.assertAlmostEqual(loaded.rolling_p90() or 0, cal.rolling_p90() or 0)
 
+    def test_concurrent_record_keeps_all_samples(self) -> None:
+        from concurrent.futures import ThreadPoolExecutor
+
+        from solivagus.planning.calibration import record_calibration_sample
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            def _one(_: int) -> None:
+                record_calibration_sample(
+                    root,
+                    source_tokens=100,
+                    completion_tokens=130,
+                    model="m",
+                    target_language="zh",
+                    tokenizer_mode="approximate",
+                )
+
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                list(pool.map(_one, range(8)))
+            loaded = load_calibration(root)
+            loaded.use_bucket("m|zh|approximate")
+            self.assertEqual(loaded.sample_count, 8)
+
     def test_unit_builder_uses_estimate_fn(self) -> None:
         nodes = [
             StructuralNode(
@@ -111,10 +135,47 @@ class InspectDataTests(unittest.TestCase):
             self.assertTrue(report.sends_ocr_text_only)
             self.assertEqual(report.unit_count, 1)
             self.assertTrue(report.user_id.startswith("pdf_"))
+            self.assertEqual(len(report.partitions), 1)
             text = format_inspect_data_report(report)
             self.assertIn("sends_ocr_text_only", text)
             self.assertIn("u00001", text)
 
+    def test_sample_zero_does_not_crash(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact = root / "doc.solivagus"
+            artifact.mkdir()
+            clear_settings_cache()
+            settings = get_settings()
+            settings.workspace = root
+            with Database(state_db_path(root)) as db:
+                doc_id = db.upsert_document(
+                    source_path=str(root / "doc.pdf"),
+                    source_sha256="sha-inspect-0",
+                    display_name="doc.pdf",
+                    artifact_dir=str(artifact),
+                    status=DocumentStatus.OCR_COMPLETE.value,
+                )
+                text = "Hello.\n"
+                db.replace_units(
+                    doc_id,
+                    [
+                        {
+                            "unit_key": "u00001",
+                            "sequence_index": 1,
+                            "source_text": text,
+                            "source_hash": sha256_text(text),
+                            "source_tokens": 2,
+                            "status": UnitStatus.PENDING.value,
+                        }
+                    ],
+                )
+                report = build_inspect_data_report(
+                    db, document_id=doc_id, settings=settings, sample_limit=0
+                )
+            self.assertEqual(report.sample_units, [])
+            self.assertEqual(len(report.partitions), 1)
+            format_inspect_data_report(report)
 
 class ConcurrencyAndRetryTests(unittest.IsolatedAsyncioTestCase):
     async def test_bump_respects_maximum(self) -> None:

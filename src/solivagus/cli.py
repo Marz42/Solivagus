@@ -167,7 +167,14 @@ def inspect_cmd(
 def inspect_data_cmd(
     ctx: typer.Context,
     pdf: Optional[Path] = typer.Argument(None, help="PDF path or omit for latest document"),
-    sample: int = typer.Option(5, "--sample", help="How many units to preview"),
+    sample: int = typer.Option(
+        5, "--sample", min=0, help="How many unit previews to include (0 = manifests only)"
+    ),
+    include_content: bool = typer.Option(
+        False,
+        "--include-content",
+        help="Include full message bodies (may contain sensitive text)",
+    ),
     json_out: bool = typer.Option(False, "--json", help="Emit JSON instead of text"),
 ) -> None:
     """Show what would be sent to the API (no network). Privacy audit helper."""
@@ -180,7 +187,11 @@ def inspect_data_cmd(
     with _open_db(settings.workspace) as db:
         doc_id, _row = _resolve_document(db, pdf)
         report = build_inspect_data_report(
-            db, document_id=doc_id, settings=settings, sample_limit=sample
+            db,
+            document_id=doc_id,
+            settings=settings,
+            sample_limit=sample,
+            include_content=include_content,
         )
     if json_out:
         import json

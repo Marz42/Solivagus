@@ -73,7 +73,9 @@ Phase 0–8 主链路落地后，对照 `project-brief/project-brief.md` 自检�
 
 # Status
 
-Accepted — 2026-08-04（P0–P2 表内项已落地；p95 延迟门禁仍延期）
+Accepted — 2026-08-04（表内功能已落地）
+
+**生产就绪门禁（2026-09-14）**：对照 soak 前审查，`main` 上曾存在跨 Partition 事件循环锁复用、CI `--no-deps` 依赖缺失、校准竞态、二分绕过闸门、`inspect-data` 清单不准等问题。修复进行中；**在门禁测试与 CI 转绿之前，不建议关闭本 ADR 或进入生产浸泡。** p95 延迟门禁仍延期。
 
 # Related Documents
 
@@ -81,4 +83,5 @@ Accepted — 2026-08-04（P0–P2 表内项已落地；p95 延迟门禁仍延期
 - `/architecture.md`
 - `/plans/solivagus-v1-roadmap.md`
 - `/decisions/adr-001-package-name-solivagus.md`
+- `/known-issues/production-gate-concurrency-ci.md`
 - `project-brief/project-brief.md` §9.5 / §11 / §19.2 / §25 / §28

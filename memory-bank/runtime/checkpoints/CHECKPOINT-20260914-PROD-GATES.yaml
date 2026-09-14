@@ -1,0 +1,87 @@
+coding_runtime_schema_version: '0.1'
+kind: coding_checkpoint
+snapshot_revision: 1
+checkpoint:
+  checkpoint_id: CHECKPOINT-20260914-PROD-GATES
+  task_id: TASK-20260804-P5
+  session_id: SESSION-20260914-P5-FIX
+  created_at: '2026-09-14T17:02:47.662078+08:00'
+  task_status: active
+  git:
+    repository_id: REPO-SOLIVAGUS
+    observed_at: '2026-09-14T17:02:47.662078+08:00'
+    head_commit: 7fbf46d3a769763004f6cb97f54acb036fa38af5
+    branch: main
+    dirty: true
+    worktree_paths:
+    - .github/workflows/check.yml
+    - README.md
+    - memory-bank/knowledge/decisions/adr-002-brief-gap-remediation.md
+    - memory-bank/knowledge/known-issues/index.md
+    - memory-bank/logs/changelog.md
+    - memory-bank/runtime/active-session.yaml
+    - memory-bank/runtime/active-task.md
+    - memory-bank/runtime/handoff.md
+    - memory-bank/runtime/sessions/SESSION-20260804-P5.yaml
+    - memory-bank/runtime/tasks/TASK-20260804-P5.yaml
+    - pyproject.toml
+    - src/solivagus/__init__.py
+    - src/solivagus/batch/supervisor.py
+    - src/solivagus/cli.py
+    - src/solivagus/concurrency/limits.py
+    - src/solivagus/pipeline/inspect_data.py
+    - src/solivagus/pipeline/partition_runner.py
+    - src/solivagus/pipeline/plan.py
+    - src/solivagus/pipeline/translate.py
+    - src/solivagus/planning/calibration.py
+    - src/solivagus/planning/planner.py
+    - tests/unit/test_solivagus_concurrency_phase5.py
+    - tests/unit/test_solivagus_gap_remediation_p1.py
+    - tests/unit/test_solivagus_plan_phase3.py
+    - memory-bank/knowledge/known-issues/production-gate-concurrency-ci.md
+    - memory-bank/runtime/sessions/SESSION-20260914-P5-FIX.yaml
+  tests:
+  - command: python -m unittest discover -s tests -p test_*.py -q
+    status: passed
+    observed_at: '2026-09-14T17:02:47.662078+08:00'
+    exit_code: 0
+    passed_count: null
+    failed_count: null
+    skipped_count: null
+    duration_seconds: 30.89100000000326
+    report_path: null
+    output_hash: sha256:167f202938013f8f045dfac2d36fae09cbe288fd927f62cc5e35dfed07c3d8d2
+  builds: []
+  touched_paths:
+  - .github/workflows/check.yml
+  - README.md
+  - memory-bank/knowledge/decisions/adr-002-brief-gap-remediation.md
+  - memory-bank/knowledge/known-issues/index.md
+  - memory-bank/logs/changelog.md
+  - memory-bank/runtime/active-session.yaml
+  - memory-bank/runtime/active-task.md
+  - memory-bank/runtime/handoff.md
+  - memory-bank/runtime/sessions/SESSION-20260804-P5.yaml
+  - memory-bank/runtime/tasks/TASK-20260804-P5.yaml
+  - pyproject.toml
+  - src/solivagus/__init__.py
+  - src/solivagus/batch/supervisor.py
+  - src/solivagus/cli.py
+  - src/solivagus/concurrency/limits.py
+  - src/solivagus/pipeline/inspect_data.py
+  - src/solivagus/pipeline/partition_runner.py
+  - src/solivagus/pipeline/plan.py
+  - src/solivagus/pipeline/translate.py
+  - src/solivagus/planning/calibration.py
+  - src/solivagus/planning/planner.py
+  - tests/unit/test_solivagus_concurrency_phase5.py
+  - tests/unit/test_solivagus_gap_remediation_p1.py
+  - tests/unit/test_solivagus_plan_phase3.py
+  - memory-bank/knowledge/known-issues/production-gate-concurrency-ci.md
+  - memory-bank/runtime/sessions/SESSION-20260914-P5-FIX.yaml
+  narrative:
+    summary: null
+    completed_work: []
+    remaining_work: []
+    blockers: []
+    next_steps: []

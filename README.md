@@ -2,7 +2,7 @@
 
 *本地技术文献智能翻译 CLI — PaddleOCR-VL + DeepSeek*
 
-当前应用版本：`0.1.0`（Memory harness / Paradigma：见根目录 `VERSION`）
+当前应用版本与根目录 `VERSION` 一致（当前 `0.7.0`）。
 
 把英文技术 PDF 转成可进 Obsidian 等阅读器的中文 / 双语 Markdown。状态在工作区 `.solivagus/`，每文档产物在 PDF 旁的 `*.solivagus/` 目录。
 
@@ -150,8 +150,7 @@ Copy-Item -Recurse -Force memory-bank-template/knowledge/* memory-bank/knowledge
 然后运行本地检查：
 
 ```bash
-python -m pip install -r requirements.txt
-python -m pip install --no-deps .
+python -m pip install ".[dev]"
 pd runtime init
 pd runtime init --write
 pd runtime verify
@@ -221,8 +220,7 @@ flowchart TD
 ### 推荐检查顺序
 
 ```bash
-python -m pip install -r requirements.txt
-python -m pip install --no-deps .
+python -m pip install ".[dev]"
 pd index rebuild
 python -m unittest discover -s tests -p "test_*.py" -v
 pd check
@@ -270,7 +268,7 @@ paradigma/
 ├── INIT_PROMPT.md
 ├── VERSION
 ├── pyproject.toml                    ← Python package metadata，版本读取根 VERSION
-├── requirements.txt                  ← PyYAML 运行时依赖
+├── requirements.txt                  ← 最小运行时提示；CI/本地检查用 `pip install ".[dev]"`
 ├── src/
 │   └── paradigma/
 │       ├── application/              ← 返回结构化结果的应用服务

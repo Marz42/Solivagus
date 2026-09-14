@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from dataclasses import dataclass
+from typing import Protocol, runtime_checkable
 
 
 @dataclass
@@ -16,8 +18,27 @@ class ConcurrencyConfig:
     adaptive: bool = True
 
 
+@runtime_checkable
+class Gate(Protocol):
+    success_streak: int
+
+    @property
+    def limit(self) -> int: ...
+
+    @property
+    def maximum(self) -> int: ...
+
+    async def acquire(self) -> None: ...
+
+    async def release(self) -> None: ...
+
+    async def record_success(self, *, adaptive: bool, bump_every: int = 30) -> None: ...
+
+    async def record_rate_limit(self, *, adaptive: bool, kind: str = "429") -> None: ...
+
+
 class ConcurrencyGate:
-    """Dynamic concurrency limit with hard max and 429/503 backoff."""
+    """Dynamic concurrency limit bound to one asyncio event loop."""
 
     def __init__(
         self,
@@ -80,14 +101,81 @@ class ConcurrencyGate:
             self._condition.notify_all()
 
 
+class ThreadSafeGate:
+    """Process-wide gate usable from many threads and event loops.
+
+    Acquire polls under a threading lock so it never occupies the default
+    asyncio executor (chat_fn also uses that pool).
+    """
+
+    def __init__(
+        self,
+        limit: int,
+        *,
+        minimum: int = 1,
+        maximum: int | None = None,
+    ) -> None:
+        self._minimum = max(1, minimum)
+        self._maximum = max(self._minimum, maximum if maximum is not None else max(limit, 1))
+        self._limit = max(self._minimum, min(int(limit), self._maximum))
+        self._active = 0
+        self._lock = threading.Lock()
+        self.success_streak = 0
+
+    @property
+    def limit(self) -> int:
+        with self._lock:
+            return self._limit
+
+    @property
+    def maximum(self) -> int:
+        return self._maximum
+
+    async def acquire(self) -> None:
+        while True:
+            with self._lock:
+                if self._active < self._limit:
+                    self._active += 1
+                    return
+            await asyncio.sleep(0.005)
+
+    async def release(self) -> None:
+        with self._lock:
+            self._active = max(0, self._active - 1)
+
+    async def record_success(self, *, adaptive: bool, bump_every: int = 30) -> None:
+        if not adaptive:
+            return
+        with self._lock:
+            self.success_streak += 1
+            if self.success_streak >= bump_every:
+                self.success_streak = 0
+                self._limit = min(self._maximum, self._limit + 2)
+
+    async def record_rate_limit(
+        self,
+        *,
+        adaptive: bool,
+        kind: str = "429",
+    ) -> None:
+        with self._lock:
+            self.success_streak = 0
+            if adaptive:
+                if kind == "503":
+                    reduced = max(self._minimum, int(self._limit * 0.75))
+                    self._limit = max(self._minimum, reduced)
+                else:
+                    self._limit = max(self._minimum, self._limit // 2)
+
+
 class NestedGates:
     """Acquire global → document → partition gates in order."""
 
     def __init__(
         self,
-        global_gate: ConcurrencyGate,
-        document_gate: ConcurrencyGate,
-        partition_gate: ConcurrencyGate,
+        global_gate: Gate,
+        document_gate: Gate,
+        partition_gate: Gate,
     ) -> None:
         self.global_gate = global_gate
         self.document_gate = document_gate

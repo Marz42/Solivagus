@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "solivagus"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Local technical PDF translation CLI (PaddleOCR-VL + DeepSeek)"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -43,6 +43,9 @@ gpu = []
 [project.scripts]
 solivagus = "solivagus.cli:main"
 pd = "paradigma.cli.main:main"
+
+[tool.setuptools.dynamic]
+version = { file = ["VERSION"] }
 
 [tool.setuptools.packages.find]
 where = ["src"]

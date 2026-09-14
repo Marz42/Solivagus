@@ -39,6 +39,24 @@ class GateTests(unittest.TestCase):
         self.assertTrue(is_rate_limited_error(ProviderError("insufficient_system_resource")))
         self.assertFalse(is_rate_limited_error(ProviderError("HTTP 400: bad")))
 
+    def test_thread_safe_gate_cross_loop(self) -> None:
+        from solivagus.concurrency.limits import ThreadSafeGate
+
+        gate = ThreadSafeGate(1, maximum=4)
+
+        async def _hold() -> None:
+            await gate.acquire()
+            await asyncio.sleep(0.05)
+            await gate.release()
+
+        async def _run() -> None:
+            await asyncio.gather(_hold(), _hold())
+
+        asyncio.run(_run())
+        self.assertEqual(gate.limit, 1)
+        # Fresh event loop must still work with the same gate instance.
+        asyncio.run(_run())
+
 
 class ConcurrentTranslateTests(unittest.TestCase):
     def _seed(self, db: Database, artifact: Path, n_units: int = 5) -> int:
@@ -189,6 +207,193 @@ class ConcurrentTranslateTests(unittest.TestCase):
                     db.fetchone("SELECT status FROM documents WHERE id=?", (doc_id,))["status"],
                     DocumentStatus.FAILED.value,
                 )
+
+
+class MultiPartitionGateTests(unittest.TestCase):
+    def _seed_two_partitions(self, db: Database, artifact: Path, *, per_part: int) -> int:
+        doc_id = db.upsert_document(
+            source_path=str(artifact.parent / "doc.pdf"),
+            source_sha256="sha-multiparty",
+            display_name="doc.pdf",
+            artifact_dir=str(artifact),
+            status=DocumentStatus.PLANNING.value,
+        )
+        part_ids = db.replace_partitions(
+            doc_id,
+            [
+                {
+                    "sequence_index": 1,
+                    "source_tokens": 1000,
+                    "unit_count": per_part,
+                    "user_id": "pdf_sha-multiparty",
+                    "warmup_status": "pending",
+                    "expected_cache_tokens": 1000,
+                    "status": "pending",
+                },
+                {
+                    "sequence_index": 2,
+                    "source_tokens": 1000,
+                    "unit_count": per_part,
+                    "user_id": "pdf_sha-multiparty",
+                    "warmup_status": "pending",
+                    "expected_cache_tokens": 1000,
+                    "status": "pending",
+                },
+            ],
+        )
+        units = []
+        seq = 1
+        for part_idx, part_id in enumerate(part_ids):
+            for i in range(1, per_part + 1):
+                text = f"Partition {part_idx + 1} unit {i}."
+                units.append(
+                    {
+                        "unit_key": f"u{seq:05d}",
+                        "sequence_index": seq,
+                        "partition_id": part_id,
+                        "source_text": text,
+                        "source_hash": sha256_text(text),
+                        "source_tokens": 100,
+                        "status": UnitStatus.PENDING.value,
+                    }
+                )
+                seq += 1
+        db.replace_units(doc_id, units)
+        return doc_id
+
+    def test_two_partitions_reuse_document_gate_without_event_loop_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact = root / "doc.solivagus"
+            artifact.mkdir()
+            clear_settings_cache()
+            settings = get_settings()
+            settings.workspace = root
+            settings.llm_api_key = "test"
+            settings.retries = 1
+            settings.enable_local_translation_cache = False
+            settings.per_partition_concurrency = 2
+            settings.per_document_concurrency = 2
+            settings.global_concurrency = 4
+            settings.adaptive_concurrency = False
+            settings.cache_settle_seconds = 0
+
+            def fake_chat(**kwargs):
+                messages = kwargs.get("messages")
+                if messages and len(messages) == 2:
+                    return "READY", "stop", {"prompt_tokens": 10, "completion_tokens": 1}
+                content = (messages or [{}])[-1].get("content", "") if messages else ""
+                unit_key = "u00001"
+                for i in range(1, 20):
+                    key = f"u{i:05d}"
+                    if key in content:
+                        unit_key = key
+                        break
+                body = f"<<<UNIT:{unit_key}:BEGIN>>>\n译{unit_key}\n<<<UNIT:{unit_key}:END>>>"
+                return (
+                    body,
+                    "stop",
+                    {
+                        "prompt_tokens": 1200,
+                        "prompt_cache_hit_tokens": 900,
+                        "prompt_cache_miss_tokens": 300,
+                        "completion_tokens": 10,
+                    },
+                )
+
+            with Database(state_db_path(root)) as db:
+                doc_id = self._seed_two_partitions(db, artifact, per_part=3)
+                result = run_translate_stage(
+                    db, document_id=doc_id, settings=settings, chat_fn=fake_chat
+                )
+                self.assertEqual(result["translated"], 6)
+                self.assertEqual(len(result["partitions"]), 2)
+                units = db.list_units(doc_id)
+                self.assertTrue(all(u["status"] == UnitStatus.DONE.value for u in units))
+                self.assertFalse(
+                    any("fallback" in str(u["warning_flags"] or "") for u in units)
+                )
+
+
+class BisectGateTests(unittest.TestCase):
+    def test_bisect_reenters_nested_gates(self) -> None:
+        import threading
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact = root / "doc.solivagus"
+            artifact.mkdir()
+            clear_settings_cache()
+            settings = get_settings()
+            settings.workspace = root
+            settings.llm_api_key = "test"
+            settings.retries = 1
+            settings.enable_local_translation_cache = False
+            settings.unit_bisect_max_depth = 1
+            settings.per_partition_concurrency = 1
+            settings.per_document_concurrency = 1
+            settings.global_concurrency = 1
+            settings.adaptive_concurrency = False
+            settings.cache_settle_seconds = 0
+
+            state = {"calls": 0, "max_inflight": 0, "inflight": 0}
+            counter_lock = threading.Lock()
+
+            def fake_chat(**kwargs):
+                messages = kwargs.get("messages")
+                if messages and len(messages) == 2:
+                    return "READY", "stop", {"prompt_tokens": 10, "completion_tokens": 1}
+                content = (messages or [{}])[-1].get("content", "") if messages else ""
+                with counter_lock:
+                    state["inflight"] += 1
+                    state["max_inflight"] = max(state["max_inflight"], state["inflight"])
+                    state["calls"] += 1
+                try:
+                    if "u00002" in content and ":a" not in content and ":b" not in content:
+                        raise ProviderError("forced unit failure for bisect")
+                    unit_key = "u00001"
+                    for key in ("u00002:a", "u00002:b", "u00002", "u00001"):
+                        if key in content:
+                            unit_key = key
+                            break
+                    body = f"<<<UNIT:{unit_key}:BEGIN>>>\nok\n<<<UNIT:{unit_key}:END>>>"
+                    return (
+                        body,
+                        "stop",
+                        {
+                            "prompt_tokens": 1000,
+                            "prompt_cache_hit_tokens": 800,
+                            "prompt_cache_miss_tokens": 200,
+                            "completion_tokens": 5,
+                        },
+                    )
+                finally:
+                    with counter_lock:
+                        state["inflight"] -= 1
+
+            with Database(state_db_path(root)) as db:
+                seed = ConcurrentTranslateTests()
+                doc_id = seed._seed(db, artifact, n_units=2)
+                text = (
+                    "First paragraph about transformers.\n\n"
+                    "Second paragraph about attention."
+                )
+                db.execute(
+                    "UPDATE translation_units SET source_text=?, source_hash=? WHERE unit_key=?",
+                    (text, sha256_text(text), "u00002"),
+                )
+                db.commit()
+                result = run_translate_stage(
+                    db, document_id=doc_id, settings=settings, chat_fn=fake_chat
+                )
+                self.assertEqual(result["translated"], 2)
+                row = db.fetchone(
+                    "SELECT warning_flags FROM translation_units WHERE unit_key=?",
+                    ("u00002",),
+                )
+                self.assertEqual(row["warning_flags"], "bisected")
+                # global=doc=partition=1 → never more than one in-flight API body call
+                self.assertEqual(state["max_inflight"], 1)
 
 
 if __name__ == "__main__":

@@ -51,7 +51,23 @@ def run_plan_stage(
         )
 
     config = planning_config_from_settings(settings)
+    from solivagus.planning.calibration import (
+        calibration_bucket_key,
+        load_calibration,
+    )
+    from solivagus.planning.tokenizer import TokenCounter
+
+    calibration = load_calibration(settings.workspace)
+    calibration.use_bucket(
+        calibration_bucket_key(
+            model=settings.llm_model,
+            target_language=settings.target_language,
+            tokenizer_mode=TokenCounter().mode.value,
+        )
+    )
+    cal_fp = calibration.fingerprint()
     config_hash = config.config_hash()
+    input_hash = config.input_hash(cal_fp)
     existing_hash = doc["active_config_hash"]
     has_partitions = bool(db.list_partitions(document_id))
     has_nodes = bool(db.list_structural_nodes(document_id))
@@ -59,7 +75,7 @@ def run_plan_stage(
         not force
         and has_partitions
         and has_nodes
-        and existing_hash == f"plan:{config_hash}"
+        and existing_hash == f"plan:{input_hash}"
     ):
         units = db.list_units(document_id)
         partitions = db.list_partitions(document_id)
@@ -71,6 +87,8 @@ def run_plan_stage(
             "unit_count": len(units),
             "partition_count": len(partitions),
             "config_hash": config_hash,
+            "input_hash": input_hash,
+            "calibration": cal_fp,
             "plan_report": str(report_path) if report_path.is_file() else None,
         }
 
@@ -81,9 +99,6 @@ def run_plan_stage(
         translation_status="planning",
     )
 
-    from solivagus.planning.calibration import load_calibration
-
-    calibration = load_calibration(settings.workspace)
     plan = plan_from_markdown(markdown, config, calibration=calibration)
     report = write_plan_artifacts(artifact_dir, plan)
 
@@ -157,7 +172,7 @@ def run_plan_stage(
         WHERE id = ?
         """,
         (
-            f"plan:{config_hash}",
+            f"plan:{input_hash}",
             DocumentStatus.PLANNING.value,
             "planned",
             utc_now(),
@@ -181,6 +196,8 @@ def run_plan_stage(
         "source_tokens": plan.source_tokens,
         "token_mode": plan.token_mode,
         "config_hash": config_hash,
+        "input_hash": input_hash,
+        "calibration": cal_fp,
         "estimated_cost": plan.cost.estimated_cost,
         "currency": plan.cost.currency,
         "cache_miss_tokens": plan.cost.cache_miss_tokens,
