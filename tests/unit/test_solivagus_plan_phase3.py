@@ -267,6 +267,47 @@ class PlanStageTests(unittest.TestCase):
                 self.assertEqual(matching[0]["status"], UnitStatus.DONE.value)
                 self.assertEqual(matching[0]["translation_text"], "kept translation\n")
 
+    def test_legacy_plan_key_replans_when_source_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact = root / "doc.solivagus"
+            artifact.mkdir()
+            source = artifact / "source.md"
+            source.write_text(SAMPLE_MD, encoding="utf-8")
+            clear_settings_cache()
+            settings = get_settings()
+            settings.workspace = root
+            with Database(state_db_path(root)) as db:
+                doc_id = db.upsert_document(
+                    source_path=str(root / "doc.pdf"),
+                    source_sha256="legacy-plan-sha",
+                    display_name="doc.pdf",
+                    artifact_dir=str(artifact),
+                    status=DocumentStatus.OCR_COMPLETE.value,
+                )
+                first = run_plan_stage(db, document_id=doc_id, settings=settings)
+                self.assertFalse(first["skipped"])
+                # Simulate pre-source-hash plan key.
+                from solivagus.database import utc_now
+
+                db.execute(
+                    "UPDATE documents SET active_config_hash = ?, updated_at = ? WHERE id = ?",
+                    (f"plan:{first['config_hash']}", utc_now(), doc_id),
+                )
+                db.commit()
+                before = [str(u["source_hash"]) for u in db.list_units(doc_id)]
+                source.write_text(
+                    SAMPLE_MD + "\n\nExtra paragraph that must force replan.\n",
+                    encoding="utf-8",
+                )
+                second = run_plan_stage(db, document_id=doc_id, settings=settings)
+                self.assertFalse(second["skipped"])
+                after = [str(u["source_hash"]) for u in db.list_units(doc_id)]
+                self.assertNotEqual(before, after)
+                self.assertEqual(second["structure_key"], second["structure_key"])
+                self.assertIn(first["config_hash"], str(second["structure_key"]))
+                self.assertNotEqual(f"plan:{first['config_hash']}", second["structure_key"])
+
 
 if __name__ == "__main__":
     unittest.main()

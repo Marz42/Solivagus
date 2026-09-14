@@ -1,0 +1,17 @@
+coding_runtime_schema_version: '0.1'
+kind: coding_session
+snapshot_revision: 2
+session:
+  session_id: SESSION-20260914-CAPSULE-RECOVERY
+  task_id: TASK-20260804-P5
+  repository:
+    workspace_id: WS-SOLIVAGUS
+    repository_id: REPO-SOLIVAGUS
+    repository_path: .
+    remote_url: https://github.com/Marz42/Solivagus.git
+  status: ended
+  started_at: '2026-09-14T17:50:05.779377+08:00'
+  updated_at: '2026-09-14T17:55:24.804772+08:00'
+  ended_at: '2026-09-14T17:55:24.804772+08:00'
+  agent_id: cursor-agent
+  current_checkpoint_id: null

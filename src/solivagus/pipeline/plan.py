@@ -96,26 +96,20 @@ def run_plan_stage(
     markdown = source_path.read_text(encoding="utf-8")
     source_hash = sha256_text(markdown)
     structure_key = _structure_plan_key(config_hash=config_hash, source_hash=source_hash)
-    # Legacy keys used plan:{config_hash} or plan:{input_hash-with-calibration}.
     existing_hash = str(doc["active_config_hash"] or "")
     has_partitions = bool(db.list_partitions(document_id))
     has_nodes = bool(db.list_structural_nodes(document_id))
-    legacy_config_key = f"plan:{config_hash}"
+    # Only the source-aware key is idempotent. Legacy plan:{config_hash} always
+    # replans so a changed source.md cannot be silently upgraded into a new key.
     if (
         not force
         and has_partitions
         and has_nodes
-        and existing_hash in {structure_key, legacy_config_key}
+        and existing_hash == structure_key
     ):
         units = db.list_units(document_id)
         partitions = db.list_partitions(document_id)
         report_path = artifact_dir / "plan-report.json"
-        if existing_hash != structure_key:
-            db.execute(
-                "UPDATE documents SET active_config_hash = ?, updated_at = ? WHERE id = ?",
-                (structure_key, utc_now(), document_id),
-            )
-            db.commit()
         return {
             "document_id": document_id,
             "skipped": True,
@@ -181,6 +175,13 @@ def run_plan_stage(
         str(u["source_hash"]): u for u in previous_units if u["source_hash"]
     }
     previous_by_key = {str(u["unit_key"]): u for u in previous_units}
+
+    # Old capsules bind to prior partition ids / plan generations — drop them.
+    db.clear_style_capsules(document_id)
+    capsule_dir = artifact_dir / "style_capsules"
+    if capsule_dir.is_dir():
+        for path in capsule_dir.glob("v*.json"):
+            path.unlink(missing_ok=True)
 
     partition_ids = db.replace_partitions(document_id, partition_rows)
     key_to_partition_id: dict[str, int] = {}

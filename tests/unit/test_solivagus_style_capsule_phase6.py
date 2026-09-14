@@ -243,5 +243,157 @@ class CapsuleIntegrationTests(unittest.TestCase):
                 self.assertTrue(any(u["style_capsule_version"] for u in units))
 
 
+class CapsuleRecoveryTests(unittest.TestCase):
+    def test_skipped_partition_rebuilds_missing_capsule(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact = root / "doc.solivagus"
+            artifact.mkdir()
+            clear_settings_cache()
+            settings = get_settings()
+            settings.workspace = root
+            settings.llm_api_key = "test"
+            settings.enable_local_translation_cache = False
+            settings.retries = 1
+            settings.cache_settle_seconds = 0
+            settings.adaptive_concurrency = False
+
+            seen_capsules: list[str] = []
+
+            def fake_chat(**kwargs):
+                messages = kwargs.get("messages")
+                if messages and len(messages) == 2:
+                    seen_capsules.append(messages[1]["content"])
+                    return "READY", "stop", {"prompt_tokens": 10, "completion_tokens": 1}
+                content = (messages or [{}])[-1].get("content", "") if messages else ""
+                unit_key = "p2u1"
+                for key in ("p1u1", "p1u2", "p2u1", "p2u2"):
+                    if key in content:
+                        unit_key = key
+                        break
+                body = (
+                    f"<<<UNIT:{unit_key}:BEGIN>>>\n"
+                    f"译文含示能（affordance）。\n"
+                    f"<<<UNIT:{unit_key}:END>>>"
+                )
+                return (
+                    body,
+                    "stop",
+                    {
+                        "prompt_tokens": 1000,
+                        "prompt_cache_hit_tokens": 800,
+                        "prompt_cache_miss_tokens": 200,
+                        "completion_tokens": 12,
+                    },
+                )
+
+            helper = CapsuleIntegrationTests()
+            with Database(state_db_path(root)) as db:
+                doc_id = helper._seed_two_partitions(db, artifact)
+                parts = db.list_partitions(doc_id)
+                p1 = int(parts[0]["id"])
+                # Simulate crash after partition-1 units done but before capsule write.
+                for unit in db.list_units_for_partition(p1):
+                    db.update_unit(
+                        int(unit["id"]),
+                        status=UnitStatus.DONE.value,
+                        translation_text="译文含示能（affordance）。\n",
+                        translation_hash=sha256_text("译文含示能（affordance）。\n"),
+                    )
+                db.commit()
+                self.assertIsNone(db.get_style_capsule_for_partition(doc_id, p1))
+                result = run_translate_stage(
+                    db, document_id=doc_id, settings=settings, chat_fn=fake_chat
+                )
+                self.assertGreaterEqual(result["translated"], 2)
+                frozen = db.get_style_capsule_for_partition(doc_id, p1)
+                self.assertIsNotNone(frozen)
+                self.assertGreaterEqual(int(frozen["version"]), 1)
+                # Partition 2 warm-up must see rebuilt prior-translation context.
+                self.assertTrue(any("affordance" in c or "示能" in c for c in seen_capsules))
+
+    def test_force_replan_starts_partition1_with_empty_capsule(self) -> None:
+        from solivagus.pipeline.plan import run_plan_stage
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact = root / "doc.solivagus"
+            artifact.mkdir()
+            (artifact / "source.md").write_text(
+                "# Title\n\n<!-- source-page: 1 -->\n\n"
+                "Intro paragraph about progressive disclosure and affordance.\n\n"
+                "## Method\n\nMore prose for a second partition budget.\n" * 40,
+                encoding="utf-8",
+            )
+            clear_settings_cache()
+            settings = get_settings()
+            settings.workspace = root
+            settings.llm_api_key = "test"
+            settings.enable_local_translation_cache = False
+            settings.retries = 1
+            settings.cache_settle_seconds = 0
+            settings.first_partition_tokens = 50
+            settings.partition_target_tokens = 50
+            settings.partition_max_tokens = 80
+            settings.unit_target_tokens = 40
+            settings.unit_max_tokens = 80
+            settings.unit_min_tokens = 10
+
+            seen: list[str] = []
+
+            def fake_chat(**kwargs):
+                messages = kwargs.get("messages")
+                if messages and len(messages) == 2:
+                    seen.append(messages[1]["content"])
+                    return "READY", "stop", {"prompt_tokens": 10, "completion_tokens": 1}
+                content = (messages or [{}])[-1].get("content", "") if messages else ""
+                unit_key = "u00001"
+                for i in range(1, 20):
+                    key = f"u{i:05d}"
+                    if key in content:
+                        unit_key = key
+                        break
+                body = f"<<<UNIT:{unit_key}:BEGIN>>>\nok\n<<<UNIT:{unit_key}:END>>>"
+                return (
+                    body,
+                    "stop",
+                    {
+                        "prompt_tokens": 200,
+                        "prompt_cache_hit_tokens": 100,
+                        "prompt_cache_miss_tokens": 100,
+                        "completion_tokens": 5,
+                    },
+                )
+
+            with Database(state_db_path(root)) as db:
+                doc_id = db.upsert_document(
+                    source_path=str(root / "doc.pdf"),
+                    source_sha256="sha-replan-capsule",
+                    display_name="doc.pdf",
+                    artifact_dir=str(artifact),
+                    status=DocumentStatus.OCR_COMPLETE.value,
+                )
+                run_plan_stage(db, document_id=doc_id, settings=settings)
+                db.insert_style_capsule(
+                    doc_id,
+                    version=1,
+                    rules_json="[]",
+                    terminology_json='{"legacy_term": "旧术语"}',
+                    examples_json="[]",
+                    boundary_context_json="{}",
+                    content_hash="deadbeef",
+                    source_partition_id=999,
+                )
+                db.commit()
+                replan = run_plan_stage(db, document_id=doc_id, settings=settings, force=True)
+                self.assertEqual(int(replan["preserved_units"]), 0)
+                self.assertEqual(db.list_style_capsules(doc_id), [])
+                run_translate_stage(
+                    db, document_id=doc_id, settings=settings, chat_fn=fake_chat
+                )
+                self.assertTrue(seen)
+                self.assertFalse(any("legacy_term" in c or "旧术语" in c for c in seen))
+
+
 if __name__ == "__main__":
     unittest.main()

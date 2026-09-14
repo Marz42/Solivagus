@@ -16,6 +16,9 @@
 - Plan 幂等键改为 config+source（不含 live sample_count）；强制重规划按 source_hash 保留已完成 Unit。
 - 全量已完成文档/分区跳过 warm-up，避免重跑把 complete 降为 failed。
 - warm-up / probe 进入 NestedGates；`inspect-data` 按分区推进风格胶囊。
+- 分区全部 DONE 但胶囊未落库时，恢复路径按完成译文重建并持久化胶囊。
+- 重规划清空旧 style capsules；翻译始终从空胶囊进入 Partition 1。
+- Legacy `plan:{config_hash}` 一律重规划（不再静默升级 source hash）。
 - Plan 报告仍记录校准指纹；`inspect-data` 输出逐 Partition 请求清单，修复 `--sample 0`。
 
 ### Changed

@@ -107,26 +107,16 @@ async def _translate_all_partitions_async(
             }
         )
         # Freeze next capsule at partition boundary for subsequent partitions.
+        entry_capsule = result.get("style_capsule") or capsule
         if result.get("skipped_all"):
-            # Keep the capsule that was frozen after this partition when available.
-            stored = db.fetchone(
-                """
-                SELECT * FROM style_capsules
-                WHERE document_id = ? AND source_partition_id = ?
-                ORDER BY version DESC, id DESC
-                LIMIT 1
-                """,
-                (document_id, part_id),
-            )
+            stored = db.get_style_capsule_for_partition(document_id, part_id)
             if stored is not None:
                 capsule = StyleCapsule.from_db_row(stored)
-            else:
-                capsule = result.get("style_capsule") or capsule
-            continue
-        next_capsule = build_next_capsule(
-            result.get("style_capsule") or capsule,
-            result["assembled"],
-        )
+                continue
+            # Crash window: units done but capsule never persisted — rebuild + write.
+            next_capsule = build_next_capsule(entry_capsule, result["assembled"])
+        else:
+            next_capsule = build_next_capsule(entry_capsule, result["assembled"])
         fields = next_capsule.to_db_fields()
         db.insert_style_capsule(
             document_id,
@@ -529,10 +519,9 @@ def run_translate_stage(
     skipped = 0
     warnings = 0
     probe_summaries: list[dict[str, Any]] = []
-    latest_row = db.get_latest_style_capsule(document_id)
-    capsule: StyleCapsule = (
-        StyleCapsule.from_db_row(latest_row) if latest_row is not None else empty_capsule()
-    )
+    # Always enter partition 1 with an empty capsule. Prior generations are cleared
+    # on replan; mid-doc resume rebuilds from stored/partition-skip recovery.
+    capsule: StyleCapsule = empty_capsule()
     capsule_dir = artifact_dir / "style_capsules"
     capsule_dir.mkdir(parents=True, exist_ok=True)
 

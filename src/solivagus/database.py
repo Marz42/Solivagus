@@ -515,6 +515,25 @@ class Database:
             (document_id,),
         )
 
+    def clear_style_capsules(self, document_id: int) -> None:
+        self.execute(
+            "DELETE FROM style_capsules WHERE document_id = ?",
+            (document_id,),
+        )
+
+    def get_style_capsule_for_partition(
+        self, document_id: int, source_partition_id: int
+    ) -> sqlite3.Row | None:
+        return self.fetchone(
+            """
+            SELECT * FROM style_capsules
+            WHERE document_id = ? AND source_partition_id = ?
+            ORDER BY version DESC, id DESC
+            LIMIT 1
+            """,
+            (document_id, source_partition_id),
+        )
+
     def update_document_status(
         self,
         document_id: int,
