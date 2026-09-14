@@ -396,5 +396,183 @@ class BisectGateTests(unittest.TestCase):
                 self.assertEqual(state["max_inflight"], 1)
 
 
+class CompletedRerunTests(unittest.TestCase):
+    def test_completed_document_rerun_skips_provider(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact = root / "doc.solivagus"
+            artifact.mkdir()
+            clear_settings_cache()
+            settings = get_settings()
+            settings.workspace = root
+            settings.llm_api_key = "test"
+            settings.enable_local_translation_cache = False
+
+            calls = {"n": 0}
+
+            def boom_chat(**kwargs):
+                calls["n"] += 1
+                raise ProviderError("provider unavailable")
+
+            with Database(state_db_path(root)) as db:
+                doc_id = ConcurrentTranslateTests()._seed(db, artifact, n_units=2)
+                for unit in db.list_units(doc_id):
+                    db.update_unit(
+                        int(unit["id"]),
+                        status=UnitStatus.DONE.value,
+                        translation_text=f"译{unit['unit_key']}\n",
+                        translation_hash=sha256_text(f"译{unit['unit_key']}\n"),
+                    )
+                db.update_document_status(
+                    doc_id,
+                    status=DocumentStatus.TRANSLATION_COMPLETE.value,
+                    translation_status="complete",
+                )
+                db.commit()
+                result = run_translate_stage(
+                    db, document_id=doc_id, settings=settings, chat_fn=boom_chat
+                )
+                self.assertTrue(result.get("skipped_all"))
+                self.assertEqual(calls["n"], 0)
+                self.assertEqual(
+                    db.fetchone("SELECT status FROM documents WHERE id=?", (doc_id,))["status"],
+                    DocumentStatus.TRANSLATION_COMPLETE.value,
+                )
+                self.assertTrue(
+                    all(u["status"] == UnitStatus.DONE.value for u in db.list_units(doc_id))
+                )
+
+
+class WarmupGateTests(unittest.TestCase):
+    def test_warmup_respects_global_gate(self) -> None:
+        import threading
+        from solivagus.concurrency.limits import ThreadSafeGate
+        from solivagus.pipeline.partition_runner import translate_partition_async
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact = root / "doc.solivagus"
+            artifact.mkdir()
+            clear_settings_cache()
+            settings = get_settings()
+            settings.workspace = root
+            settings.llm_api_key = "test"
+            settings.retries = 1
+            settings.enable_local_translation_cache = False
+            settings.adaptive_concurrency = False
+            settings.cache_settle_seconds = 0
+            settings.per_partition_concurrency = 1
+            settings.per_document_concurrency = 1
+
+            state = {"inflight": 0, "max": 0}
+            lock = threading.Lock()
+
+            def fake_chat(**kwargs):
+                messages = kwargs.get("messages")
+                with lock:
+                    state["inflight"] += 1
+                    state["max"] = max(state["max"], state["inflight"])
+                try:
+                    time.sleep(0.05)
+                    if messages and len(messages) == 2:
+                        return "READY", "stop", {"prompt_tokens": 10, "completion_tokens": 1}
+                    content = (messages or [{}])[-1].get("content", "") if messages else ""
+                    unit_key = "u00001" if "u00001" in content else "u00002"
+                    body = f"<<<UNIT:{unit_key}:BEGIN>>>\nok\n<<<UNIT:{unit_key}:END>>>"
+                    return (
+                        body,
+                        "stop",
+                        {
+                            "prompt_tokens": 1000,
+                            "prompt_cache_hit_tokens": 800,
+                            "prompt_cache_miss_tokens": 200,
+                            "completion_tokens": 5,
+                        },
+                    )
+                finally:
+                    with lock:
+                        state["inflight"] -= 1
+
+            async def _run() -> None:
+                gate = ThreadSafeGate(1, maximum=1)
+                with Database(state_db_path(root)) as db:
+                    seed = ConcurrentTranslateTests()
+                    doc_a = seed._seed(db, artifact, n_units=1)
+                    artifact_b = root / "doc2.solivagus"
+                    artifact_b.mkdir()
+                    # Re-seed a second document with different sha by direct insert.
+                    doc_b = db.upsert_document(
+                        source_path=str(root / "doc2.pdf"),
+                        source_sha256="sha-warmup-b",
+                        display_name="doc2.pdf",
+                        artifact_dir=str(artifact_b),
+                        status=DocumentStatus.PLANNING.value,
+                    )
+                    part_ids = db.replace_partitions(
+                        doc_b,
+                        [
+                            {
+                                "sequence_index": 1,
+                                "source_tokens": 1000,
+                                "unit_count": 1,
+                                "user_id": "pdf_sha-warmup-b",
+                                "warmup_status": "pending",
+                                "expected_cache_tokens": 1000,
+                                "status": "pending",
+                            }
+                        ],
+                    )
+                    text = "Unit body B."
+                    db.replace_units(
+                        doc_b,
+                        [
+                            {
+                                "unit_key": "u00001",
+                                "sequence_index": 1,
+                                "partition_id": part_ids[0],
+                                "source_text": text,
+                                "source_hash": sha256_text(text),
+                                "source_tokens": 100,
+                                "status": UnitStatus.PENDING.value,
+                            }
+                        ],
+                    )
+                    parts_a = db.list_partitions(doc_a)
+                    parts_b = db.list_partitions(doc_b)
+                    units_a = db.list_units(doc_a)
+                    units_b = db.list_units(doc_b)
+                    await asyncio.gather(
+                        translate_partition_async(
+                            db,
+                            document_id=doc_a,
+                            source_sha256="sha-phase5",
+                            document_title="doc",
+                            partition=parts_a[0],
+                            units=units_a,
+                            settings=settings,
+                            artifact_dir=artifact,
+                            cache_root=root / "cache",
+                            chat_fn=fake_chat,
+                            global_gate=gate,
+                        ),
+                        translate_partition_async(
+                            db,
+                            document_id=doc_b,
+                            source_sha256="sha-warmup-b",
+                            document_title="doc2",
+                            partition=parts_b[0],
+                            units=units_b,
+                            settings=settings,
+                            artifact_dir=artifact_b,
+                            cache_root=root / "cache",
+                            chat_fn=fake_chat,
+                            global_gate=gate,
+                        ),
+                    )
+
+            asyncio.run(_run())
+            self.assertEqual(state["max"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

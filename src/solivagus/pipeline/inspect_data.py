@@ -14,9 +14,10 @@ from solivagus.providers.prompts import (
     build_unit_messages,
     document_user_id,
 )
-from solivagus.style.capsule import StyleCapsule, empty_capsule
+from solivagus.style.capsule import StyleCapsule, build_next_capsule, empty_capsule
 from solivagus.util.markdown import protect_markdown, split_passthrough_segments
 from solivagus.util.text import sha256_text
+from solivagus.models import UnitStatus
 
 
 @dataclass
@@ -121,17 +122,12 @@ def build_inspect_data_report(
     user_id = document_user_id(source_sha) if source_sha else "(unset)"
     document_title = Path(str(doc["display_name"])).stem
 
-    capsule = empty_capsule()
-    latest = db.get_latest_style_capsule(document_id)
-    if latest is not None:
-        capsule = StyleCapsule.from_db_row(latest)
-    capsule_text = capsule.to_prompt_text()
-    has_style_payload = bool(
-        capsule.terminology
-        or capsule.examples
-        or (capsule.boundary_context or {}).get("source_tail")
-        or (capsule.boundary_context or {}).get("translation_tail")
-    )
+    stored_by_source_partition: dict[int, StyleCapsule] = {}
+    for row in db.list_style_capsules(document_id):
+        src_part = row["source_partition_id"]
+        if src_part is None:
+            continue
+        stored_by_source_partition[int(src_part)] = StyleCapsule.from_db_row(row)
 
     units_by_partition: dict[int | None, list[Any]] = {}
     for unit in units:
@@ -141,6 +137,18 @@ def build_inspect_data_report(
     partition_manifests: list[dict[str, Any]] = []
     preview_budget = sample_limit
     samples: list[dict[str, Any]] = []
+    # Match translate semantics: partition N enters with capsule frozen after N-1.
+    running_capsule = empty_capsule()
+    any_style_payload = False
+
+    def _capsule_has_payload(cap: StyleCapsule) -> bool:
+        return bool(
+            cap.terminology
+            or cap.examples
+            or (cap.boundary_context or {}).get("source_tail")
+            or (cap.boundary_context or {}).get("translation_tail")
+            or cap.version > 0
+        )
 
     def _emit_partition(
         *,
@@ -148,8 +156,13 @@ def build_inspect_data_report(
         partition_id: int | None,
         part_units: list[Any],
         part_user_id: str,
+        capsule: StyleCapsule,
+        capsule_source: str,
     ) -> None:
-        nonlocal preview_budget
+        nonlocal preview_budget, any_style_payload
+        capsule_text = capsule.to_prompt_text()
+        has_style_payload = _capsule_has_payload(capsule)
+        any_style_payload = any_style_payload or has_style_payload
         unit_dicts = [
             {"unit_key": u["unit_key"], "source_text": u["source_text"] or ""} for u in part_units
         ]
@@ -180,6 +193,7 @@ def build_inspect_data_report(
                     "stable_prefix": "partition OCR/markdown + style capsule",
                     "warmup_assistant": "placeholder PARTITION_READY (real run uses warm-up reply)",
                     "dynamic_user": "protected OCR/markdown for this unit",
+                    "style_capsule": capsule_source,
                 },
             }
             unit_requests.append(unit_entry)
@@ -202,6 +216,7 @@ def build_inspect_data_report(
                 "stable_system_chars": len(system),
                 "style_capsule_version": capsule.version_label(),
                 "style_capsule_chars": len(capsule_text),
+                "style_capsule_source": capsule_source,
                 "includes_prior_translations": has_style_payload,
                 "warmup_request": {
                     "message_roles": ["system", "user"],
@@ -218,22 +233,49 @@ def build_inspect_data_report(
         )
 
     if partitions:
+        previous_partition_id: int | None = None
         for partition in partitions:
             part_id = int(partition["id"])
             part_units = units_by_partition.get(part_id, [])
             part_user = str(partition["user_id"] or user_id)
+            if previous_partition_id is not None and previous_partition_id in stored_by_source_partition:
+                capsule_source = "frozen after previous partition"
+            elif running_capsule.version > 0 or _capsule_has_payload(running_capsule):
+                capsule_source = "projected from completed prior units"
+            else:
+                capsule_source = "empty (partition entry)"
             _emit_partition(
                 sequence_index=int(partition["sequence_index"]),
                 partition_id=part_id,
                 part_units=part_units,
                 part_user_id=part_user,
+                capsule=running_capsule,
+                capsule_source=capsule_source,
             )
+            # Advance capsule the way translate freezes at partition boundaries.
+            if part_id in stored_by_source_partition:
+                running_capsule = stored_by_source_partition[part_id]
+            else:
+                assembled = [
+                    {
+                        "unit_key": str(u["unit_key"]),
+                        "source_text": str(u["source_text"] or ""),
+                        "translation_text": str(u["translation_text"] or ""),
+                    }
+                    for u in part_units
+                    if str(u["status"]) == UnitStatus.DONE.value and u["translation_text"]
+                ]
+                if assembled:
+                    running_capsule = build_next_capsule(running_capsule, assembled)
+            previous_partition_id = part_id
     elif units:
         _emit_partition(
             sequence_index=None,
             partition_id=None,
             part_units=list(units),
             part_user_id=user_id,
+            capsule=running_capsule,
+            capsule_source="empty (flat units)",
         )
 
     first_prefix_chars = (
@@ -246,6 +288,7 @@ def build_inspect_data_report(
     notes = [
         "PDF and images stay local; API payloads are text messages only.",
         "Stable prefix is built per partition from that partition's units, not the whole document.",
+        "Style capsule progresses partition-by-partition (empty → frozen/projected after prior).",
         "Style capsule may include prior translations and boundary context — not OCR-only.",
         "user_id is derived from document SHA-256, not filename or author.",
         "This command does not call the network.",
@@ -266,7 +309,7 @@ def build_inspect_data_report(
         user_id=user_id,
         prompt_version=settings.prompt_version,
         target_mode=settings.target_mode,
-        sends_ocr_text_only=not has_style_payload,
+        sends_ocr_text_only=not any_style_payload,
         unit_count=len(units),
         sample_units=samples,
         partitions=partition_manifests,

@@ -32,16 +32,14 @@ class PlanningConfig:
         return sha256_text(payload)[:16]
 
     def input_hash(self, calibration_fingerprint: dict[str, Any] | None = None) -> str:
-        payload = {
-            "config_hash": self.config_hash(),
-            "calibration": calibration_fingerprint or {
-                "schema": 2,
-                "bucket": "none",
-                "sample_count": 0,
-                "rolling_p90": None,
-            },
-        }
-        return sha256_text(json.dumps(payload, sort_keys=True, default=str))[:16]
+        """Idempotency key for Unit/Partition topology.
+
+        Calibration affects cost / estimated_output_tokens only — not topology.
+        Live sample_count must never invalidate an existing plan, or batch reruns
+        will wipe completed Units via replace_units().
+        """
+        del calibration_fingerprint  # reported separately; not part of structure key
+        return self.config_hash()
 
 
 @dataclass

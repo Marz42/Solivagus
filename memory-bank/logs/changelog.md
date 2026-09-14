@@ -13,7 +13,10 @@
 - 单文档多 Partition 共用一个事件循环，避免跨 loop 复用 `ConcurrencyGate`。
 - Batch Supervisor 持有 `ThreadSafeGate` 作为批级 global gate。
 - 二分重试重新进入 `NestedGates`；校准写入加进程+文件锁并按 model/语言/tokenizer 分桶。
-- Plan 幂等哈希纳入校准指纹；`inspect-data` 按 Partition 输出请求清单，修复 `--sample 0`。
+- Plan 幂等键改为 config+source（不含 live sample_count）；强制重规划按 source_hash 保留已完成 Unit。
+- 全量已完成文档/分区跳过 warm-up，避免重跑把 complete 降为 failed。
+- warm-up / probe 进入 NestedGates；`inspect-data` 按分区推进风格胶囊。
+- Plan 报告仍记录校准指纹；`inspect-data` 输出逐 Partition 请求清单，修复 `--sample 0`。
 
 ### Changed
 - 批处理 PDF 根目录：`Settings.batch_dir` 默认改为 `null`；通过 `SOLIVAGUS_BATCH_DIR`、配置或 CLI 显式指定，不再默认 `D:\PDFS`。

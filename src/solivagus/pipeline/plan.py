@@ -32,6 +32,32 @@ def planning_config_from_settings(settings: Settings) -> PlanningConfig:
     )
 
 
+def _structure_plan_key(*, config_hash: str, source_hash: str) -> str:
+    """Stable plan identity: planning knobs + source.md, not live calibration."""
+    return f"plan:{config_hash}:{source_hash[:16]}"
+
+
+def _preserve_unit_fields(existing: Any | None) -> dict[str, Any]:
+    if existing is None:
+        return {}
+    status = str(existing["status"] or "")
+    translation = existing["translation_text"]
+    if status not in {UnitStatus.DONE.value, UnitStatus.FALLBACK.value} or not translation:
+        return {}
+    return {
+        "status": status,
+        "translation_text": translation,
+        "translation_hash": existing["translation_hash"],
+        "provider": existing["provider"],
+        "model": existing["model"],
+        "prompt_version": existing["prompt_version"],
+        "style_capsule_version": existing["style_capsule_version"],
+        "attempt_count": existing["attempt_count"] or 0,
+        "warning_flags": existing["warning_flags"],
+        "translated_file": existing["translated_file"],
+    }
+
+
 def run_plan_stage(
     db: Database,
     *,
@@ -67,19 +93,29 @@ def run_plan_stage(
     )
     cal_fp = calibration.fingerprint()
     config_hash = config.config_hash()
-    input_hash = config.input_hash(cal_fp)
-    existing_hash = doc["active_config_hash"]
+    markdown = source_path.read_text(encoding="utf-8")
+    source_hash = sha256_text(markdown)
+    structure_key = _structure_plan_key(config_hash=config_hash, source_hash=source_hash)
+    # Legacy keys used plan:{config_hash} or plan:{input_hash-with-calibration}.
+    existing_hash = str(doc["active_config_hash"] or "")
     has_partitions = bool(db.list_partitions(document_id))
     has_nodes = bool(db.list_structural_nodes(document_id))
+    legacy_config_key = f"plan:{config_hash}"
     if (
         not force
         and has_partitions
         and has_nodes
-        and existing_hash == f"plan:{input_hash}"
+        and existing_hash in {structure_key, legacy_config_key}
     ):
         units = db.list_units(document_id)
         partitions = db.list_partitions(document_id)
         report_path = artifact_dir / "plan-report.json"
+        if existing_hash != structure_key:
+            db.execute(
+                "UPDATE documents SET active_config_hash = ?, updated_at = ? WHERE id = ?",
+                (structure_key, utc_now(), document_id),
+            )
+            db.commit()
         return {
             "document_id": document_id,
             "skipped": True,
@@ -87,12 +123,12 @@ def run_plan_stage(
             "unit_count": len(units),
             "partition_count": len(partitions),
             "config_hash": config_hash,
-            "input_hash": input_hash,
+            "input_hash": config_hash,
+            "structure_key": structure_key,
             "calibration": cal_fp,
             "plan_report": str(report_path) if report_path.is_file() else None,
         }
 
-    markdown = source_path.read_text(encoding="utf-8")
     db.update_document_status(
         document_id,
         status=DocumentStatus.PLANNING.value,
@@ -139,27 +175,51 @@ def run_plan_stage(
         }
         for p in plan.partitions
     ]
+    # Capture completed work before partition/unit replacement.
+    previous_units = db.list_units(document_id)
+    previous_by_hash = {
+        str(u["source_hash"]): u for u in previous_units if u["source_hash"]
+    }
+    previous_by_key = {str(u["unit_key"]): u for u in previous_units}
+
     partition_ids = db.replace_partitions(document_id, partition_rows)
     key_to_partition_id: dict[str, int] = {}
     for part, part_id in zip(plan.partitions, partition_ids, strict=True):
         for key in part.unit_keys:
             key_to_partition_id[key] = part_id
 
-    unit_rows = [
-        {
-            "unit_key": unit.unit_key,
-            "sequence_index": unit.sequence_index,
-            "partition_id": key_to_partition_id.get(unit.unit_key),
-            "heading_path": unit.heading_path,
-            "source_text": unit.source_text,
-            "source_hash": unit.source_hash,
-            "source_tokens": unit.source_tokens,
-            "estimated_output_tokens": unit.estimated_output_tokens,
-            "status": UnitStatus.PENDING.value,
-            "source_file": f"units/{unit.unit_key}.source.md",
-        }
-        for unit in plan.units
-    ]
+    unit_rows = []
+    preserved = 0
+    for unit in plan.units:
+        prev = previous_by_hash.get(unit.source_hash) or previous_by_key.get(unit.unit_key)
+        if prev is not None and str(prev["source_hash"] or "") != unit.source_hash:
+            prev = None
+        kept = _preserve_unit_fields(prev)
+        if kept:
+            preserved += 1
+        unit_rows.append(
+            {
+                "unit_key": unit.unit_key,
+                "sequence_index": unit.sequence_index,
+                "partition_id": key_to_partition_id.get(unit.unit_key),
+                "heading_path": unit.heading_path,
+                "source_text": unit.source_text,
+                "source_hash": unit.source_hash,
+                "source_tokens": unit.source_tokens,
+                "estimated_output_tokens": unit.estimated_output_tokens,
+                "status": kept.get("status", UnitStatus.PENDING.value),
+                "translation_text": kept.get("translation_text"),
+                "translation_hash": kept.get("translation_hash"),
+                "provider": kept.get("provider"),
+                "model": kept.get("model"),
+                "prompt_version": kept.get("prompt_version"),
+                "style_capsule_version": kept.get("style_capsule_version"),
+                "attempt_count": kept.get("attempt_count", 0),
+                "warning_flags": kept.get("warning_flags"),
+                "source_file": f"units/{unit.unit_key}.source.md",
+                "translated_file": kept.get("translated_file"),
+            }
+        )
     db.replace_units(document_id, unit_rows)
 
     db.execute(
@@ -172,7 +232,7 @@ def run_plan_stage(
         WHERE id = ?
         """,
         (
-            f"plan:{input_hash}",
+            structure_key,
             DocumentStatus.PLANNING.value,
             "planned",
             utc_now(),
@@ -196,8 +256,10 @@ def run_plan_stage(
         "source_tokens": plan.source_tokens,
         "token_mode": plan.token_mode,
         "config_hash": config_hash,
-        "input_hash": input_hash,
+        "input_hash": config_hash,
+        "structure_key": structure_key,
         "calibration": cal_fp,
+        "preserved_units": preserved,
         "estimated_cost": plan.cost.estimated_cost,
         "currency": plan.cost.currency,
         "cache_miss_tokens": plan.cost.cache_miss_tokens,

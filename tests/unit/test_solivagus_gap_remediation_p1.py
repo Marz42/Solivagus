@@ -177,6 +177,84 @@ class InspectDataTests(unittest.TestCase):
             self.assertEqual(len(report.partitions), 1)
             format_inspect_data_report(report)
 
+    def test_partition_capsules_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact = root / "doc.solivagus"
+            artifact.mkdir()
+            clear_settings_cache()
+            settings = get_settings()
+            settings.workspace = root
+            with Database(state_db_path(root)) as db:
+                doc_id = db.upsert_document(
+                    source_path=str(root / "doc.pdf"),
+                    source_sha256="sha-inspect-caps",
+                    display_name="doc.pdf",
+                    artifact_dir=str(artifact),
+                    status=DocumentStatus.PLANNING.value,
+                )
+                part_ids = db.replace_partitions(
+                    doc_id,
+                    [
+                        {
+                            "sequence_index": 1,
+                            "source_tokens": 10,
+                            "unit_count": 1,
+                            "user_id": "pdf_x",
+                            "warmup_status": "done",
+                            "expected_cache_tokens": 10,
+                            "status": "ready",
+                        },
+                        {
+                            "sequence_index": 2,
+                            "source_tokens": 10,
+                            "unit_count": 1,
+                            "user_id": "pdf_x",
+                            "warmup_status": "pending",
+                            "expected_cache_tokens": 10,
+                            "status": "pending",
+                        },
+                    ],
+                )
+                t1 = "First partition prose.\n"
+                t2 = "Second partition prose.\n"
+                db.replace_units(
+                    doc_id,
+                    [
+                        {
+                            "unit_key": "u00001",
+                            "sequence_index": 1,
+                            "partition_id": part_ids[0],
+                            "source_text": t1,
+                            "source_hash": sha256_text(t1),
+                            "source_tokens": 5,
+                            "status": UnitStatus.DONE.value,
+                            "translation_text": "第一分区译文（Transformer）\n",
+                        },
+                        {
+                            "unit_key": "u00002",
+                            "sequence_index": 2,
+                            "partition_id": part_ids[1],
+                            "source_text": t2,
+                            "source_hash": sha256_text(t2),
+                            "source_tokens": 5,
+                            "status": UnitStatus.PENDING.value,
+                        },
+                    ],
+                )
+                report = build_inspect_data_report(
+                    db, document_id=doc_id, settings=settings, sample_limit=0
+                )
+            self.assertEqual(len(report.partitions), 2)
+            self.assertEqual(report.partitions[0]["style_capsule_version"], "0")
+            self.assertFalse(report.partitions[0]["includes_prior_translations"])
+            self.assertNotEqual(report.partitions[0]["style_capsule_version"], report.partitions[1]["style_capsule_version"])
+            self.assertTrue(report.partitions[1]["includes_prior_translations"])
+            self.assertNotEqual(
+                report.partitions[0]["stable_prefix_hash"],
+                report.partitions[1]["stable_prefix_hash"],
+            )
+
 class ConcurrencyAndRetryTests(unittest.IsolatedAsyncioTestCase):
     async def test_bump_respects_maximum(self) -> None:
         gate = ConcurrencyGate(2, maximum=4)

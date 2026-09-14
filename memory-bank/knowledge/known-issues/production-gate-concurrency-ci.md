@@ -62,9 +62,11 @@ paradigma:
 
 - 单文档单事件循环调度全部 Partition；Batch Supervisor 持有 `ThreadSafeGate` 作为批级 global gate。
 - CI / README 安装 `.[dev]`；`pyproject` 从 `VERSION` 动态读版本。
-- `record_calibration_sample` 文件锁 + 按 model/language/tokenizer 分桶；plan input hash 含校准指纹。
+- `record_calibration_sample` 文件锁 + 按 model/language/tokenizer 分桶；plan **结构**幂等键为 config+source.md（校准指纹仅写入报告，不触发 replace_units）。
+- 强制重规划时按 `source_hash` 保留 DONE/FALLBACK 译文。
+- 全量已完成文档/分区跳过 warm-up；warm-up/probe 进入 `NestedGates`。
 - 二分左右半重新进入 `NestedGates`。
-- `inspect-data` 输出逐 Partition 请求 manifest，支持 `--include-content`，`--sample 0` 合法。
+- `inspect-data` 按 Partition 推进胶囊并输出请求 manifest，支持 `--include-content`，`--sample 0` 合法。
 
 # Related Documents
 
@@ -74,4 +76,4 @@ paradigma:
 
 # Status
 
-open — 修复进行中（TASK-20260804-P5 / SESSION-20260914-P5-FIX）；门禁转绿后再评估关闭。
+open — 幂等/跳过 warm-up/闸门/inspect 胶囊推演已补强；真实批目录 soak 前仍保持 open。

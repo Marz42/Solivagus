@@ -289,6 +289,14 @@ async def translate_partition_async(
             seed_key = str(seed["unit_key"])
             units = [seed] + [u for u in units if str(u["unit_key"]) != seed_key]
 
+    def _unit_already_done(unit: Any) -> bool:
+        return (
+            not force
+            and str(unit["status"]) == UnitStatus.DONE.value
+            and bool(unit["translation_text"])
+        )
+
+    pending_units = [u for u in units if not _unit_already_done(u)]
     user_id = str(partition["user_id"] or document_user_id(source_sha256))
     expected = int(partition["expected_cache_tokens"] or partition["source_tokens"] or 0)
     unit_dicts = [
@@ -306,18 +314,6 @@ async def translate_partition_async(
 
     stable_system, stable_user, prefix_hash = _rebuild_prefix()
 
-    warmup = await asyncio.to_thread(
-        run_partition_warmup,
-        chat_fn=chat_fn,
-        settings=settings,
-        stable_system=stable_system,
-        stable_user=stable_user,
-        prefix_hash=prefix_hash,
-        user_id=user_id,
-    )
-    usage_totals["api_calls"] = usage_totals.get("api_calls", 0) + 1
-    rewarmed = False
-
     decision = ProbeDecision.FULL
     probe_hits = 0
     re_probed = False
@@ -327,7 +323,64 @@ async def translate_partition_async(
     assembled: list[dict[str, str]] = []
     pending_after_probe: list[Any] = []
     barrier_done = False
+    rewarmed = False
     partition_gate = ConcurrencyGate(1, maximum=cfg.max_global_limit)
+
+    # Fully complete partition: never call the provider (avoids demoting done docs).
+    if not pending_units:
+        for unit in units:
+            skipped += 1
+            assembled.append(
+                {
+                    "unit_key": str(unit["unit_key"]),
+                    "source_text": str(unit["source_text"]),
+                    "translation_text": str(unit["translation_text"]),
+                }
+            )
+
+        def _update_partition_skipped() -> None:
+            db.update_partition(
+                int(partition["id"]),
+                warmup_status="skipped_done",
+                prefix_hash=prefix_hash,
+                user_id=user_id,
+                status="ready",
+            )
+            db.commit()
+
+        await writer.run(_update_partition_skipped)
+        return {
+            "translated": 0,
+            "skipped": skipped,
+            "warnings": 0,
+            "probe_decision": ProbeDecision.FULL.value,
+            "probe_hit_tokens": 0,
+            "probe_ratio": 0.0,
+            "assembled": assembled,
+            "re_probed": False,
+            "partition_concurrency": partition_gate.limit,
+            "style_capsule_version": capsule.version_label(),
+            "style_capsule_hash": capsule.content_hash(),
+            "style_capsule": capsule,
+            "rewarmed": False,
+            "prefix_hash": prefix_hash,
+            "skipped_all": True,
+        }
+
+    async def _run_warmup() -> Any:
+        async with NestedGates(global_gate, document_gate, partition_gate):
+            return await asyncio.to_thread(
+                run_partition_warmup,
+                chat_fn=chat_fn,
+                settings=settings,
+                stable_system=stable_system,
+                stable_user=stable_user,
+                prefix_hash=prefix_hash,
+                user_id=user_id,
+            )
+
+    warmup = await _run_warmup()
+    usage_totals["api_calls"] = usage_totals.get("api_calls", 0) + 1
 
     async def persist_success(
         *,
@@ -541,6 +594,7 @@ async def translate_partition_async(
                         translation_text=text,
                     )
                     stable_system, stable_user, prefix_hash = _rebuild_prefix()
+                    # Already holding NestedGates when under_gates; do not re-acquire.
                     warmup = await asyncio.to_thread(
                         run_partition_warmup,
                         chat_fn=chat_fn,
@@ -651,10 +705,9 @@ async def translate_partition_async(
             if strict:
                 raise
 
-    # Pass 1: skip done units; run first API unit as probe (serial barrier).
+    # Pass 1: skip done units; run first API unit as probe (gated barrier).
     for unit in units:
-        status = str(unit["status"])
-        if status == UnitStatus.DONE.value and unit["translation_text"] and not force:
+        if _unit_already_done(unit):
             skipped += 1
             assembled.append(
                 {
@@ -665,7 +718,7 @@ async def translate_partition_async(
             )
             continue
         if not barrier_done:
-            await process_one_unit(unit, under_gates=False, is_probe=True)
+            await process_one_unit(unit, under_gates=True, is_probe=True)
         else:
             pending_after_probe.append(unit)
 

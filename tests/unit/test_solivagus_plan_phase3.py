@@ -90,7 +90,7 @@ class PlanningTests(unittest.TestCase):
         )
         self.assertEqual(plan_a.token_mode, TokenMode.APPROXIMATE.value)
 
-    def test_plan_input_hash_includes_calibration(self) -> None:
+    def test_plan_input_hash_ignores_live_calibration_samples(self) -> None:
         from solivagus.planning.calibration import OutputCalibration
 
         cal = OutputCalibration()
@@ -99,7 +99,8 @@ class PlanningTests(unittest.TestCase):
         plan_default = plan_from_markdown(SAMPLE_MD, PlanningConfig())
         plan_cal = plan_from_markdown(SAMPLE_MD, PlanningConfig(), calibration=cal)
         self.assertEqual(plan_default.config_hash, plan_cal.config_hash)
-        self.assertNotEqual(plan_default.input_hash, plan_cal.input_hash)
+        # Topology key must stay stable when live calibration samples grow.
+        self.assertEqual(plan_default.input_hash, plan_cal.input_hash)
         self.assertIsNotNone(plan_cal.calibration)
         self.assertEqual(plan_cal.calibration["sample_count"], 5)
 
@@ -181,6 +182,90 @@ class PlanStageTests(unittest.TestCase):
 
                 again = run_plan_stage(db, document_id=doc_id, settings=settings, force=False)
                 self.assertTrue(again["skipped"])
+
+    def test_calibration_growth_does_not_invalidate_plan(self) -> None:
+        from solivagus.planning.calibration import record_calibration_sample
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact = root / "doc.solivagus"
+            artifact.mkdir()
+            (artifact / "source.md").write_text(SAMPLE_MD, encoding="utf-8")
+            clear_settings_cache()
+            settings = get_settings()
+            settings.workspace = root
+            with Database(state_db_path(root)) as db:
+                doc_id = db.upsert_document(
+                    source_path=str(root / "doc.pdf"),
+                    source_sha256="cal-plan-sha",
+                    display_name="doc.pdf",
+                    artifact_dir=str(artifact),
+                    status=DocumentStatus.OCR_COMPLETE.value,
+                )
+                first = run_plan_stage(db, document_id=doc_id, settings=settings)
+                self.assertFalse(first["skipped"])
+                units = db.list_units(doc_id)
+                # Simulate completed translation + online calibration growth.
+                for unit in units:
+                    db.update_unit(
+                        int(unit["id"]),
+                        status=UnitStatus.DONE.value,
+                        translation_text=f"译{unit['unit_key']}\n",
+                        translation_hash=sha256_text(f"译{unit['unit_key']}\n"),
+                    )
+                db.commit()
+                for _ in range(5):
+                    record_calibration_sample(
+                        root,
+                        source_tokens=100,
+                        completion_tokens=140,
+                        model=settings.llm_model,
+                        target_language=settings.target_language,
+                        tokenizer_mode="approximate",
+                    )
+                second = run_plan_stage(db, document_id=doc_id, settings=settings)
+                self.assertTrue(second["skipped"])
+                statuses = [str(u["status"]) for u in db.list_units(doc_id)]
+                self.assertEqual(statuses, [UnitStatus.DONE.value] * len(statuses))
+
+    def test_forced_replan_preserves_done_units_by_source_hash(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact = root / "doc.solivagus"
+            artifact.mkdir()
+            (artifact / "source.md").write_text(SAMPLE_MD, encoding="utf-8")
+            clear_settings_cache()
+            settings = get_settings()
+            settings.workspace = root
+            with Database(state_db_path(root)) as db:
+                doc_id = db.upsert_document(
+                    source_path=str(root / "doc.pdf"),
+                    source_sha256="preserve-plan-sha",
+                    display_name="doc.pdf",
+                    artifact_dir=str(artifact),
+                    status=DocumentStatus.OCR_COMPLETE.value,
+                )
+                run_plan_stage(db, document_id=doc_id, settings=settings)
+                units = db.list_units(doc_id)
+                first = units[0]
+                db.update_unit(
+                    int(first["id"]),
+                    status=UnitStatus.DONE.value,
+                    translation_text="kept translation\n",
+                    translation_hash=sha256_text("kept translation\n"),
+                )
+                db.commit()
+                result = run_plan_stage(db, document_id=doc_id, settings=settings, force=True)
+                self.assertFalse(result["skipped"])
+                self.assertGreaterEqual(int(result["preserved_units"]), 1)
+                matching = [
+                    u
+                    for u in db.list_units(doc_id)
+                    if str(u["source_hash"]) == str(first["source_hash"])
+                ]
+                self.assertEqual(len(matching), 1)
+                self.assertEqual(matching[0]["status"], UnitStatus.DONE.value)
+                self.assertEqual(matching[0]["translation_text"], "kept translation\n")
 
 
 if __name__ == "__main__":

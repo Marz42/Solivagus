@@ -107,6 +107,22 @@ async def _translate_all_partitions_async(
             }
         )
         # Freeze next capsule at partition boundary for subsequent partitions.
+        if result.get("skipped_all"):
+            # Keep the capsule that was frozen after this partition when available.
+            stored = db.fetchone(
+                """
+                SELECT * FROM style_capsules
+                WHERE document_id = ? AND source_partition_id = ?
+                ORDER BY version DESC, id DESC
+                LIMIT 1
+                """,
+                (document_id, part_id),
+            )
+            if stored is not None:
+                capsule = StyleCapsule.from_db_row(stored)
+            else:
+                capsule = result.get("style_capsule") or capsule
+            continue
         next_capsule = build_next_capsule(
             result.get("style_capsule") or capsule,
             result["assembled"],
@@ -411,13 +427,88 @@ def run_translate_stage(
         )
 
     chat = chat_fn or call_chat_api
+    partitions = db.list_partitions(document_id)
+
+    def _all_units_done() -> bool:
+        return (not force) and all(
+            str(u["status"]) == UnitStatus.DONE.value and bool(u["translation_text"])
+            for u in units
+        )
+
+    # Fully translated document: assemble only — never flip to failed via warm-up.
+    if partitions and _all_units_done():
+        document_title = Path(doc["display_name"]).stem
+        assembled = [
+            {
+                "unit_key": str(u["unit_key"]),
+                "source_text": str(u["source_text"]),
+                "translation_text": str(u["translation_text"]),
+            }
+            for u in units
+        ]
+        assemble_outputs(
+            artifact_dir,
+            assembled,
+            document_title=document_title,
+            pdf_name=str(doc["display_name"]),
+            model=settings.llm_model,
+            make_bilingual=True,
+        )
+        final_status = DocumentStatus.TRANSLATION_COMPLETE.value
+        # Preserve warnings status if already marked with warnings.
+        current = str(doc["status"] or "")
+        if current.endswith("warnings") or current == DocumentStatus.TRANSLATION_COMPLETE_WITH_WARNINGS.value:
+            final_status = DocumentStatus.TRANSLATION_COMPLETE_WITH_WARNINGS.value
+        db.update_document_status(
+            document_id,
+            status=final_status,
+            translation_status="complete_with_warnings"
+            if final_status.endswith("warnings")
+            else "complete",
+        )
+        for name in ("translated.zh.md", "translated.bilingual.md"):
+            path = artifact_dir / name
+            if path.is_file():
+                db.record_artifact(
+                    document_id, name, str(path), sha256_text(path.read_text(encoding="utf-8"))
+                )
+        from solivagus.pipeline.manifest import write_document_manifest
+
+        manifest_path = write_document_manifest(
+            artifact_dir,
+            document_id=document_id,
+            display_name=str(doc["display_name"]),
+            source_sha256=str(doc["source_sha256"]),
+            status=final_status,
+            model=settings.llm_model,
+            extra={"translated": 0, "warnings": 0, "skipped": len(units)},
+        )
+        db.record_artifact(
+            document_id,
+            "manifest",
+            str(manifest_path),
+            sha256_text(manifest_path.read_text(encoding="utf-8")),
+        )
+        db.commit()
+        return {
+            "document_id": document_id,
+            "translated": 0,
+            "skipped": len(units),
+            "warnings": 0,
+            "artifact_dir": str(artifact_dir),
+            "status": final_status,
+            "mode": "partition_cache",
+            "manifest": str(manifest_path),
+            "skipped_all": True,
+            "partitions": [],
+        }
+
     db.update_document_status(
         document_id,
         status=DocumentStatus.TRANSLATION_RUNNING.value,
         translation_status="running",
     )
 
-    partitions = db.list_partitions(document_id)
     if not partitions:
         return _translate_without_partitions(
             db,
