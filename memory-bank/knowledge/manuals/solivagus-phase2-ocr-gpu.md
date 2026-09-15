@@ -3,7 +3,7 @@ type: paradigma-manual
 title: Solivagus Phase 2 GPU OCR Verification
 description: Local GPU acceptance notes for solivagus run --stage ocr on fixture F1.
 tags: [manual, ocr, gpu, phase-2, solivagus]
-timestamp: 2026-08-03T21:20:00+08:00
+timestamp: 2026-09-15T17:51:25+08:00
 paradigma:
   schema_version: "0.1"
   temperature: warm
@@ -25,6 +25,7 @@ paradigma:
     - solivagus run --stage ocr
     - Attention_Is_All_You_Need.solivagus
     - gpu:0
+    - normalize_for_pandoc
   relations:
     informed_by:
       - /plans/solivagus-v1-roadmap.md
@@ -63,7 +64,7 @@ solivagus run "example\Attention Is All You Need.pdf" `
 | `example/Attention_Is_All_You_Need.solivagus/` | 文档 artifact（stem 经 sanitize） |
 | `…/preflight.json` | 页数与预检摘要 |
 | `…/ocr/batch-0001/`、`batch-0002/` | 各含 `done.json`、`source.md`、`result.json` |
-| `…/source.md` | 合并后的全文 OCR Markdown |
+| `…/source.md` | 合并后的全文 OCR Markdown（经 `normalize_for_pandoc`：Pandoc Image + 紧凑 `$math$`） |
 | `…/units/uNNNNN.source.md` | Phase 2 临时字符分块种子（Phase 3 将由结构规划替换） |
 | `.solivagus/state.db` | `documents.status = ocr_complete` |
 
@@ -84,6 +85,7 @@ solivagus run "example\Attention Is All You Need.pdf" `
 - [x] F1 GPU OCR 完成且 `ocr_complete`
 - [x] 批次 checkpoint（`done.json`）齐全
 - [x] 合并 `source.md` 生成
+- [x] `tests/unit/test_pandoc_compat.py`：HTML img → Pandoc Image、inline math 去空格、Pandoc AST、XeLaTeX 一步 PDF
 - [ ] F2/F3 质量抽查（差扫描 / 尚可扫描）仍可选
 - [ ] 人工对照 F1 的 HTML/MD 参考做结构质量笔记（Phase 3 前可选）
 

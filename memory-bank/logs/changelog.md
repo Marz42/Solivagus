@@ -9,6 +9,7 @@
 ## [Unreleased]
 
 ### Fixed
+- OCR Markdown 规范化为 Pandoc 原生：居中 HTML `<img>` → `![…](…){width=…}`；`$  expr  $` → `$expr$`，避免 XeLaTeX PDF 丢图与 `\circ` text-mode Missing character。
 - CI 安装改为 `pip install ".[dev]"`；`pyproject`/`solivagus.__version__` 与根 `VERSION` 对齐。
 - 单文档多 Partition 共用一个事件循环，避免跨 loop 复用 `ConcurrencyGate`。
 - Batch Supervisor 持有 `ThreadSafeGate` 作为批级 global gate。

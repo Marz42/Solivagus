@@ -3,8 +3,8 @@ $ErrorActionPreference = "Stop"
 
 # --- configure these ---
 $Repo = "D:\Repos\Solivagus"
-$BatchDir = "E:\papers\inbox"   # REQUIRED: your PDF folder (no product default)
-$Workspace = $Repo              # or a dedicated workspace root
+$BatchDir = "E:\papers\inbox"   # REQUIRED: overnight PDF folder
+$Workspace = Join-Path $Repo "soak-workspace\overnight"  # dedicated; avoid repo-root stale state
 $EnvFile = Join-Path $Repo ".env"
 $Profile = "balanced"
 # -----------------------

@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Sequence
 
+from solivagus.util.pandoc_compat import normalize_for_pandoc
 from solivagus.util.text import atomic_write_text
 
 
@@ -32,8 +33,10 @@ def assemble_outputs(
     ]
 
     for item in chunks:
-        source = item["source_text"].strip()
-        translated = (item.get("translation_text") or source).strip()
+        source = normalize_for_pandoc(item["source_text"].strip())
+        translated = normalize_for_pandoc(
+            (item.get("translation_text") or source).strip()
+        )
         zh_parts.append(translated + "\n")
         if make_bilingual:
             block_id = item["unit_key"]
@@ -44,9 +47,12 @@ def assemble_outputs(
                 f"{translated}\n"
             )
 
-    atomic_write_text(work_dir / "translated.zh.md", "\n".join(zh_parts).rstrip() + "\n")
+    atomic_write_text(
+        work_dir / "translated.zh.md",
+        normalize_for_pandoc("\n".join(zh_parts).rstrip() + "\n"),
+    )
     if make_bilingual:
         atomic_write_text(
             work_dir / "translated.bilingual.md",
-            "\n".join(bilingual_parts).rstrip() + "\n",
+            normalize_for_pandoc("\n".join(bilingual_parts).rstrip() + "\n"),
         )

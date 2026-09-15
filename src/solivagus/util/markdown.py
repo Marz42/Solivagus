@@ -34,7 +34,7 @@ PROTECT_PATTERNS: Sequence[re.Pattern[str]] = [
     re.compile(r"(?ms)^```.*?^```\s*$|^~~~.*?^~~~\s*$"),
     re.compile(r"\$\$.*?\$\$", re.DOTALL),
     re.compile(r"\\\[.*?\\\]", re.DOTALL),
-    re.compile(r"!\[[^\]]*\]\([^\n)]*\)"),
+    re.compile(r"!\[[^\]]*\]\([^\n)]*\)(?:\{[^}\n]*\})?"),
     re.compile(r"`[^`\n]+`"),
     re.compile(r"(?<!\$)\$(?!\$)(?:\\.|[^$\n])+?\$(?!\$)"),
     re.compile(r"https?://[^\s<>\])]+"),

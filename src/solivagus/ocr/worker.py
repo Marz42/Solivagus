@@ -11,6 +11,7 @@ from typing import Any, Sequence
 
 from solivagus.ocr.checkpoints import OcrConfig, PageRange, missing_page_stub, write_done
 from solivagus.ocr.labels import BASE_IGNORE_LABELS
+from solivagus.util.pandoc_compat import normalize_for_pandoc
 from solivagus.util.text import atomic_write_json, atomic_write_text, sha256_text
 
 
@@ -140,6 +141,7 @@ def run_batch_ocr(
                 markdown_text = save_markdown_images(
                     markdown_text, images, artifact_dir, page_number
                 ).strip()
+                markdown_text = normalize_for_pandoc(markdown_text)
                 page_marker = (
                     f"<!-- source-page: {page_number} -->\n"
                     f"<a id=\"source-page-{page_number}\"></a>"

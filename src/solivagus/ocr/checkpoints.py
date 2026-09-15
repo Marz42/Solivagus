@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from solivagus.ocr.labels import BASE_IGNORE_LABELS, build_ignore_labels
+from solivagus.util.pandoc_compat import normalize_for_pandoc
 
 
 @dataclass(frozen=True)
@@ -166,9 +167,13 @@ def assemble_source_markdown(
                 f"> [OCR 警告] 批次 batch-{index:04d} 缺少 source.md。\n"
             )
             continue
-        parts.append(source.read_text(encoding="utf-8").rstrip() + "\n\n")
+        batch_text = normalize_for_pandoc(source.read_text(encoding="utf-8"))
+        parts.append(batch_text.rstrip() + "\n\n")
     out = artifact_dir / "source.md"
-    out.write_text("".join(parts).rstrip() + "\n", encoding="utf-8")
+    out.write_text(
+        normalize_for_pandoc("".join(parts).rstrip() + "\n"),
+        encoding="utf-8",
+    )
     return out
 
 

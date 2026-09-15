@@ -7,6 +7,7 @@ from solivagus.util.markdown import (
     split_markdown,
     split_passthrough_segments,
 )
+from solivagus.util.pandoc_compat import normalize_for_pandoc
 from solivagus.util.text import (
     atomic_write_json,
     atomic_write_text,
@@ -20,6 +21,7 @@ __all__ = [
     "atomic_write_json",
     "atomic_write_text",
     "make_untranslated_fallback",
+    "normalize_for_pandoc",
     "protect_markdown",
     "read_json",
     "restore_markdown",

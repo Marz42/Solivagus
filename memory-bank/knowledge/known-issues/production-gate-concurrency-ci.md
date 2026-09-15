@@ -3,7 +3,7 @@ type: paradigma-known-issue
 title: Production soak blocked until concurrency and CI gates are green
 description: Cross-partition asyncio gate reuse, CI dependency install, calibration races, ungated bisect, and inspect-data manifests blocked production soak on 2026-09-14.
 tags: [known-issue, concurrency, ci, calibration, inspect-data, solivagus]
-timestamp: 2026-09-14T16:45:00+08:00
+timestamp: 2026-09-15T15:51:49+08:00
 paradigma:
   schema_version: "0.1"
   temperature: warm
@@ -76,4 +76,4 @@ paradigma:
 
 # Status
 
-open — 幂等/跳过 warm-up/闸门/inspect 胶囊推演已补强；真实批目录 soak 前仍保持 open。
+open — 代码门禁已合入；真实 soak 分两阶段：`scripts/soak-prerun.ps1`（两篇预跑 + `scripts/soak_verify.py`）通过后，再跑 `scripts/night-batch.ps1` ≥12h 无人值守。ADR-002 / 本 issue 仅在正式 SOAK 全绿后关闭。
