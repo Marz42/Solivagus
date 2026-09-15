@@ -538,6 +538,128 @@ class CapsuleRecoveryTests(unittest.TestCase):
                 # QA reads latest capsule terminology; reconcile must have restored it.
                 self.assertIsNotNone(db.get_latest_style_capsule(doc_id))
 
+    def test_db_committed_json_missing_healed_on_rerun(self) -> None:
+        import json
+        from unittest import mock
+
+        from solivagus.pipeline import translate as translate_mod
+        from solivagus.pipeline.translate import _persist_partition_capsule
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact = root / "doc.solivagus"
+            artifact.mkdir()
+            clear_settings_cache()
+            settings = get_settings()
+            settings.workspace = root
+            settings.llm_api_key = "test"
+
+            helper = CapsuleIntegrationTests()
+            db_path = state_db_path(root)
+            with Database(db_path) as db:
+                doc_id = helper._seed_two_partitions(db, artifact)
+                for unit in db.list_units(doc_id):
+                    text = f"译文含示能（affordance）{unit['unit_key']}\n"
+                    db.update_unit(
+                        int(unit["id"]),
+                        status=UnitStatus.DONE.value,
+                        translation_text=text,
+                        translation_hash=sha256_text(text),
+                    )
+                db.update_document_status(
+                    doc_id,
+                    status=DocumentStatus.TRANSLATION_COMPLETE.value,
+                    translation_status="complete",
+                )
+                db.commit()
+                parts = db.list_partitions(doc_id)
+                capsule_dir = artifact / "style_capsules"
+                capsule_dir.mkdir(parents=True, exist_ok=True)
+
+                write_calls = {"n": 0}
+                real_write = translate_mod.atomic_write_json
+
+                def flaky_write(path: Path, data: dict) -> None:
+                    write_calls["n"] += 1
+                    if write_calls["n"] == 1:
+                        raise OSError("injected crash after DB commit")
+                    real_write(path, data)
+
+                # Simulate first partition persist: DB commits, JSON write fails.
+                entry = empty_capsule()
+                assembled = [
+                    {
+                        "unit_key": str(u["unit_key"]),
+                        "source_text": str(u["source_text"]),
+                        "translation_text": str(u["translation_text"]),
+                    }
+                    for u in db.list_units_for_partition(int(parts[0]["id"]))
+                ]
+                first_capsule = build_next_capsule(entry, assembled)
+                with mock.patch.object(translate_mod, "atomic_write_json", flaky_write):
+                    with self.assertRaises(OSError):
+                        _persist_partition_capsule(
+                            db,
+                            document_id=doc_id,
+                            part_id=int(parts[0]["id"]),
+                            capsule=first_capsule,
+                            capsule_dir=capsule_dir,
+                        )
+                # Second partition: DB only, no JSON (manual crash simulation).
+                assembled2 = [
+                    {
+                        "unit_key": str(u["unit_key"]),
+                        "source_text": str(u["source_text"]),
+                        "translation_text": str(u["translation_text"]),
+                    }
+                    for u in db.list_units_for_partition(int(parts[1]["id"]))
+                ]
+                second_capsule = build_next_capsule(first_capsule, assembled2)
+                fields = second_capsule.to_db_fields()
+                db.insert_style_capsule(
+                    doc_id,
+                    version=int(fields["version"]),
+                    rules_json=str(fields["rules_json"]),
+                    terminology_json=str(fields["terminology_json"]),
+                    examples_json=str(fields["examples_json"]),
+                    boundary_context_json=str(fields["boundary_context_json"]),
+                    content_hash=str(fields["content_hash"]),
+                    source_partition_id=int(parts[1]["id"]),
+                )
+                self.assertEqual(len(db.list_style_capsules(doc_id)), 2)
+                self.assertFalse((capsule_dir / "v1.json").is_file())
+                self.assertFalse((capsule_dir / "v2.json").is_file())
+                expected_hashes = {
+                    1: first_capsule.content_hash(),
+                    2: second_capsule.content_hash(),
+                }
+
+            calls = {"n": 0}
+
+            def boom_chat(**_kwargs):
+                calls["n"] += 1
+                raise AssertionError("provider must not be called")
+
+            # Re-open DB (SOAK-style process restart) and heal via all-done translate.
+            with Database(db_path) as db:
+                result = run_translate_stage(
+                    db, document_id=doc_id, settings=settings, chat_fn=boom_chat
+                )
+                self.assertTrue(result.get("skipped_all"))
+                self.assertEqual(calls["n"], 0)
+                reconcile = result.get("capsule_reconcile") or {}
+                self.assertEqual(reconcile.get("rebuilt_partition_ids"), [])
+                self.assertEqual(
+                    sorted(reconcile.get("json_restored_partition_ids") or []),
+                    sorted(int(p["id"]) for p in db.list_partitions(doc_id)),
+                )
+                for version, expected in expected_hashes.items():
+                    path = capsule_dir / f"v{version}.json"
+                    self.assertTrue(path.is_file(), msg=f"missing {path.name}")
+                    payload = json.loads(path.read_text(encoding="utf-8"))
+                    self.assertEqual(payload["content_hash"], expected)
+                    self.assertEqual(payload["version"], version)
+
 
 if __name__ == "__main__":
     unittest.main()

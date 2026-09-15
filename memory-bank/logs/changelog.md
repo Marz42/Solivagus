@@ -18,6 +18,7 @@
 - warm-up / probe 进入 NestedGates；`inspect-data` 按分区推进风格胶囊。
 - 分区全部 DONE 但胶囊未落库时，恢复路径按完成译文重建并持久化胶囊。
 - 全量 DONE 提前返回前执行无 provider 的 capsule reconciliation（重规划清胶囊后仍可恢复）。
+- DB 已有 capsule 行但 `style_capsules/vN.json` 缺失/损坏时，reconcile 从 DB 原子重写 JSON 并补记 artifact。
 - 重规划清空旧 style capsules；翻译始终从空胶囊进入 Partition 1。
 - Legacy `plan:{config_hash}` 一律重规划（不再静默升级 source hash）。
 - Plan 报告仍记录校准指纹；`inspect-data` 输出逐 Partition 请求清单，修复 `--sample 0`。

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -34,6 +35,73 @@ from solivagus.workspace import translation_cache_root
 ChatFn = Callable[..., tuple[str, str | None, dict[str, Any]]]
 
 
+def _capsule_json_payload(capsule: StyleCapsule, *, part_id: int) -> dict[str, Any]:
+    return {
+        "version": capsule.version,
+        "style_rules": capsule.style_rules,
+        "terminology": capsule.terminology,
+        "examples": capsule.examples,
+        "boundary_context": capsule.boundary_context,
+        "content_hash": capsule.content_hash(),
+        "source_partition_id": part_id,
+    }
+
+
+def _capsule_json_path(capsule_dir: Path, version: int) -> Path:
+    return capsule_dir / f"v{int(version)}.json"
+
+
+def _capsule_json_matches(
+    path: Path,
+    *,
+    expected_hash: str,
+    version: int,
+    part_id: int,
+) -> bool:
+    if not path.is_file():
+        return False
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeError):
+        return False
+    if not isinstance(raw, dict):
+        return False
+    if str(raw.get("content_hash") or "") != expected_hash:
+        return False
+    if int(raw.get("version") or -1) != int(version):
+        return False
+    if int(raw.get("source_partition_id") or -1) != int(part_id):
+        return False
+    return True
+
+
+def _ensure_capsule_json_artifact(
+    db: Database,
+    *,
+    document_id: int,
+    part_id: int,
+    capsule: StyleCapsule,
+    capsule_dir: Path,
+) -> bool:
+    """Rewrite style_capsules/vN.json from DB capsule when missing/corrupt. Return True if rewritten."""
+    capsule_dir.mkdir(parents=True, exist_ok=True)
+    path = _capsule_json_path(capsule_dir, capsule.version)
+    expected = capsule.content_hash()
+    if _capsule_json_matches(
+        path, expected_hash=expected, version=capsule.version, part_id=part_id
+    ):
+        return False
+    atomic_write_json(path, _capsule_json_payload(capsule, part_id=part_id))
+    db.record_artifact(
+        document_id,
+        "style_capsule",
+        str(path),
+        expected,
+    )
+    db.commit()
+    return True
+
+
 def _persist_partition_capsule(
     db: Database,
     *,
@@ -42,6 +110,11 @@ def _persist_partition_capsule(
     capsule: StyleCapsule,
     capsule_dir: Path,
 ) -> StyleCapsule:
+    """Persist capsule to SQLite then JSON (+ artifact).
+
+    JSON heal on reconcile covers the crash window after DB commit / before JSON write.
+    """
+    capsule_dir.mkdir(parents=True, exist_ok=True)
     fields = capsule.to_db_fields()
     db.insert_style_capsule(
         document_id,
@@ -53,23 +126,13 @@ def _persist_partition_capsule(
         content_hash=str(fields["content_hash"]),
         source_partition_id=part_id,
     )
-    capsule_path = capsule_dir / f"v{capsule.version}.json"
-    atomic_write_json(
-        capsule_path,
-        {
-            "version": capsule.version,
-            "style_rules": capsule.style_rules,
-            "terminology": capsule.terminology,
-            "examples": capsule.examples,
-            "boundary_context": capsule.boundary_context,
-            "content_hash": capsule.content_hash(),
-            "source_partition_id": part_id,
-        },
-    )
+    # insert_style_capsule commits; if we die before the next lines, reconcile heals JSON.
+    path = _capsule_json_path(capsule_dir, capsule.version)
+    atomic_write_json(path, _capsule_json_payload(capsule, part_id=part_id))
     db.record_artifact(
         document_id,
         "style_capsule",
-        str(capsule_path),
+        str(path),
         capsule.content_hash(),
     )
     db.commit()
@@ -87,14 +150,15 @@ def reconcile_missing_style_capsules(
     """Rebuild missing per-partition capsules from DONE units without provider calls.
 
     Walks partitions in order from empty_capsule(). Existing rows for a partition
-    are reused; gaps are filled via build_next_capsule from that partition's
-    completed translations (deterministic recovery after replan/clear).
+    are reused (and JSON is healed if absent/corrupt); gaps are filled via
+    build_next_capsule from that partition's completed translations.
     """
     capsule_dir = artifact_dir / "style_capsules"
     capsule_dir.mkdir(parents=True, exist_ok=True)
     capsule = empty_capsule()
     rebuilt: list[int] = []
     reused: list[int] = []
+    json_restored: list[int] = []
 
     for partition in partitions:
         part_id = int(partition["id"])
@@ -111,7 +175,16 @@ def reconcile_missing_style_capsules(
         stored = db.get_style_capsule_for_partition(document_id, part_id)
         if stored is not None:
             capsule = StyleCapsule.from_db_row(stored)
-            reused.append(part_id)
+            if _ensure_capsule_json_artifact(
+                db,
+                document_id=document_id,
+                part_id=part_id,
+                capsule=capsule,
+                capsule_dir=capsule_dir,
+            ):
+                json_restored.append(part_id)
+            else:
+                reused.append(part_id)
             continue
         if not assembled:
             continue
@@ -130,6 +203,7 @@ def reconcile_missing_style_capsules(
     return {
         "rebuilt_partition_ids": rebuilt,
         "reused_partition_ids": reused,
+        "json_restored_partition_ids": json_restored,
         "latest_version": int(latest["version"]) if latest is not None else 0,
         "latest_terminology": (
             StyleCapsule.from_db_row(latest).terminology if latest is not None else {}
@@ -215,6 +289,13 @@ async def _translate_all_partitions_async(
             stored = db.get_style_capsule_for_partition(document_id, part_id)
             if stored is not None:
                 capsule = StyleCapsule.from_db_row(stored)
+                _ensure_capsule_json_artifact(
+                    db,
+                    document_id=document_id,
+                    part_id=part_id,
+                    capsule=capsule,
+                    capsule_dir=capsule_dir,
+                )
                 continue
             # Crash window: units done but capsule never persisted — rebuild + write.
             next_capsule = build_next_capsule(entry_capsule, result["assembled"])
