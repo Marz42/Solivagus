@@ -394,6 +394,150 @@ class CapsuleRecoveryTests(unittest.TestCase):
                 self.assertTrue(seen)
                 self.assertFalse(any("legacy_term" in c or "旧术语" in c for c in seen))
 
+    def test_all_done_rebuilds_missing_final_capsule_without_provider(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact = root / "doc.solivagus"
+            artifact.mkdir()
+            clear_settings_cache()
+            settings = get_settings()
+            settings.workspace = root
+            settings.llm_api_key = "test"
+
+            calls = {"n": 0}
+
+            def boom_chat(**_kwargs):
+                calls["n"] += 1
+                raise AssertionError("provider must not be called")
+
+            helper = CapsuleIntegrationTests()
+            with Database(state_db_path(root)) as db:
+                doc_id = helper._seed_two_partitions(db, artifact)
+                for unit in db.list_units(doc_id):
+                    text = f"译文含示能（affordance）{unit['unit_key']}\n"
+                    db.update_unit(
+                        int(unit["id"]),
+                        status=UnitStatus.DONE.value,
+                        translation_text=text,
+                        translation_hash=sha256_text(text),
+                    )
+                db.update_document_status(
+                    doc_id,
+                    status=DocumentStatus.TRANSLATION_COMPLETE.value,
+                    translation_status="complete",
+                )
+                db.commit()
+                self.assertEqual(db.list_style_capsules(doc_id), [])
+                result = run_translate_stage(
+                    db, document_id=doc_id, settings=settings, chat_fn=boom_chat
+                )
+                self.assertTrue(result.get("skipped_all"))
+                self.assertEqual(calls["n"], 0)
+                capsules = db.list_style_capsules(doc_id)
+                self.assertGreaterEqual(len(capsules), 2)
+                latest = db.get_latest_style_capsule(doc_id)
+                self.assertIsNotNone(latest)
+                terms = StyleCapsule.from_db_row(latest).terminology
+                self.assertTrue(terms)
+                self.assertIn("affordance", terms)
+                reconcile = result.get("capsule_reconcile") or {}
+                self.assertEqual(len(reconcile.get("rebuilt_partition_ids") or []), 2)
+
+    def test_force_replan_preserving_done_units_rebuilds_capsules_for_qa(self) -> None:
+        from solivagus.pipeline.plan import run_plan_stage
+        from solivagus.qa.runner import run_qa_stage
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact = root / "doc.solivagus"
+            artifact.mkdir()
+            source_md = (
+                "# Title\n\n<!-- source-page: 1 -->\n\n"
+                "Intro discusses progressive disclosure and affordance in systems.\n\n"
+                "## Method\n\n"
+                "More prose about agentic workflow and progressive disclosure.\n"
+            )
+            (artifact / "source.md").write_text(source_md, encoding="utf-8")
+            clear_settings_cache()
+            settings = get_settings()
+            settings.workspace = root
+            settings.llm_api_key = "test"
+            settings.qa_enabled = True
+            settings.qa_max_repair_attempts = 0
+            settings.first_partition_tokens = 80
+            settings.partition_target_tokens = 80
+            settings.partition_max_tokens = 120
+            settings.unit_target_tokens = 40
+            settings.unit_max_tokens = 80
+            settings.unit_min_tokens = 5
+
+            calls = {"n": 0}
+
+            def boom_chat(**_kwargs):
+                calls["n"] += 1
+                raise AssertionError("provider must not be called for reconcile")
+
+            with Database(state_db_path(root)) as db:
+                doc_id = db.upsert_document(
+                    source_path=str(root / "doc.pdf"),
+                    source_sha256="sha-replan-preserve-capsule",
+                    display_name="doc.pdf",
+                    artifact_dir=str(artifact),
+                    status=DocumentStatus.OCR_COMPLETE.value,
+                )
+                first = run_plan_stage(db, document_id=doc_id, settings=settings)
+                self.assertFalse(first["skipped"])
+                old_parts = [int(p["id"]) for p in db.list_partitions(doc_id)]
+                for unit in db.list_units(doc_id):
+                    text = "译文含示能（affordance）与渐进式披露（progressive disclosure）。\n"
+                    db.update_unit(
+                        int(unit["id"]),
+                        status=UnitStatus.DONE.value,
+                        translation_text=text,
+                        translation_hash=sha256_text(text),
+                    )
+                db.insert_style_capsule(
+                    doc_id,
+                    version=1,
+                    rules_json="[]",
+                    terminology_json='{"affordance": "示能"}',
+                    examples_json="[]",
+                    boundary_context_json="{}",
+                    content_hash="oldcapsule",
+                    source_partition_id=old_parts[0],
+                )
+                db.commit()
+                self.assertEqual(len(db.list_style_capsules(doc_id)), 1)
+
+                replan = run_plan_stage(db, document_id=doc_id, settings=settings, force=True)
+                self.assertGreaterEqual(int(replan["preserved_units"]), 1)
+                self.assertEqual(db.list_style_capsules(doc_id), [])
+                new_parts = [int(p["id"]) for p in db.list_partitions(doc_id)]
+                self.assertTrue(all(u["status"] == UnitStatus.DONE.value for u in db.list_units(doc_id)))
+
+                result = run_translate_stage(
+                    db, document_id=doc_id, settings=settings, chat_fn=boom_chat
+                )
+                self.assertTrue(result.get("skipped_all"))
+                self.assertEqual(calls["n"], 0)
+                capsules = db.list_style_capsules(doc_id)
+                self.assertGreaterEqual(len(capsules), 1)
+                bound_ids = {
+                    int(c["source_partition_id"])
+                    for c in capsules
+                    if c["source_partition_id"] is not None
+                }
+                self.assertTrue(bound_ids.issubset(set(new_parts)))
+                latest = db.get_latest_style_capsule(doc_id)
+                self.assertIsNotNone(latest)
+                terms = StyleCapsule.from_db_row(latest).terminology
+                self.assertIn("affordance", terms)
+
+                qa = run_qa_stage(db, document_id=doc_id, settings=settings, chat_fn=boom_chat)
+                self.assertFalse(qa.get("skipped", False))
+                # QA reads latest capsule terminology; reconcile must have restored it.
+                self.assertIsNotNone(db.get_latest_style_capsule(doc_id))
+
 
 if __name__ == "__main__":
     unittest.main()

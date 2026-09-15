@@ -34,6 +34,109 @@ from solivagus.workspace import translation_cache_root
 ChatFn = Callable[..., tuple[str, str | None, dict[str, Any]]]
 
 
+def _persist_partition_capsule(
+    db: Database,
+    *,
+    document_id: int,
+    part_id: int,
+    capsule: StyleCapsule,
+    capsule_dir: Path,
+) -> StyleCapsule:
+    fields = capsule.to_db_fields()
+    db.insert_style_capsule(
+        document_id,
+        version=int(fields["version"]),
+        rules_json=str(fields["rules_json"]),
+        terminology_json=str(fields["terminology_json"]),
+        examples_json=str(fields["examples_json"]),
+        boundary_context_json=str(fields["boundary_context_json"]),
+        content_hash=str(fields["content_hash"]),
+        source_partition_id=part_id,
+    )
+    capsule_path = capsule_dir / f"v{capsule.version}.json"
+    atomic_write_json(
+        capsule_path,
+        {
+            "version": capsule.version,
+            "style_rules": capsule.style_rules,
+            "terminology": capsule.terminology,
+            "examples": capsule.examples,
+            "boundary_context": capsule.boundary_context,
+            "content_hash": capsule.content_hash(),
+            "source_partition_id": part_id,
+        },
+    )
+    db.record_artifact(
+        document_id,
+        "style_capsule",
+        str(capsule_path),
+        capsule.content_hash(),
+    )
+    db.commit()
+    return capsule
+
+
+def reconcile_missing_style_capsules(
+    db: Database,
+    *,
+    document_id: int,
+    partitions: list[Any],
+    units_by_partition: dict[int | None, list[Any]],
+    artifact_dir: Path,
+) -> dict[str, Any]:
+    """Rebuild missing per-partition capsules from DONE units without provider calls.
+
+    Walks partitions in order from empty_capsule(). Existing rows for a partition
+    are reused; gaps are filled via build_next_capsule from that partition's
+    completed translations (deterministic recovery after replan/clear).
+    """
+    capsule_dir = artifact_dir / "style_capsules"
+    capsule_dir.mkdir(parents=True, exist_ok=True)
+    capsule = empty_capsule()
+    rebuilt: list[int] = []
+    reused: list[int] = []
+
+    for partition in partitions:
+        part_id = int(partition["id"])
+        part_units = units_by_partition.get(part_id, [])
+        assembled = [
+            {
+                "unit_key": str(u["unit_key"]),
+                "source_text": str(u["source_text"] or ""),
+                "translation_text": str(u["translation_text"] or ""),
+            }
+            for u in part_units
+            if str(u["status"]) == UnitStatus.DONE.value and u["translation_text"]
+        ]
+        stored = db.get_style_capsule_for_partition(document_id, part_id)
+        if stored is not None:
+            capsule = StyleCapsule.from_db_row(stored)
+            reused.append(part_id)
+            continue
+        if not assembled:
+            continue
+        next_capsule = build_next_capsule(capsule, assembled)
+        _persist_partition_capsule(
+            db,
+            document_id=document_id,
+            part_id=part_id,
+            capsule=next_capsule,
+            capsule_dir=capsule_dir,
+        )
+        capsule = next_capsule
+        rebuilt.append(part_id)
+
+    latest = db.get_latest_style_capsule(document_id)
+    return {
+        "rebuilt_partition_ids": rebuilt,
+        "reused_partition_ids": reused,
+        "latest_version": int(latest["version"]) if latest is not None else 0,
+        "latest_terminology": (
+            StyleCapsule.from_db_row(latest).terminology if latest is not None else {}
+        ),
+    }
+
+
 async def _translate_all_partitions_async(
     db: Database,
     *,
@@ -117,37 +220,13 @@ async def _translate_all_partitions_async(
             next_capsule = build_next_capsule(entry_capsule, result["assembled"])
         else:
             next_capsule = build_next_capsule(entry_capsule, result["assembled"])
-        fields = next_capsule.to_db_fields()
-        db.insert_style_capsule(
-            document_id,
-            version=int(fields["version"]),
-            rules_json=str(fields["rules_json"]),
-            terminology_json=str(fields["terminology_json"]),
-            examples_json=str(fields["examples_json"]),
-            boundary_context_json=str(fields["boundary_context_json"]),
-            content_hash=str(fields["content_hash"]),
-            source_partition_id=part_id,
+        _persist_partition_capsule(
+            db,
+            document_id=document_id,
+            part_id=part_id,
+            capsule=next_capsule,
+            capsule_dir=capsule_dir,
         )
-        capsule_path = capsule_dir / f"v{next_capsule.version}.json"
-        atomic_write_json(
-            capsule_path,
-            {
-                "version": next_capsule.version,
-                "style_rules": next_capsule.style_rules,
-                "terminology": next_capsule.terminology,
-                "examples": next_capsule.examples,
-                "boundary_context": next_capsule.boundary_context,
-                "content_hash": next_capsule.content_hash(),
-                "source_partition_id": part_id,
-            },
-        )
-        db.record_artifact(
-            document_id,
-            "style_capsule",
-            str(capsule_path),
-            next_capsule.content_hash(),
-        )
-        db.commit()
         capsule = next_capsule
 
     return translated_count, skipped, warnings, assembled, probe_summaries
@@ -425,9 +504,22 @@ def run_translate_stage(
             for u in units
         )
 
-    # Fully translated document: assemble only — never flip to failed via warm-up.
+    # Fully translated document: reconcile capsules then assemble — never call provider.
     if partitions and _all_units_done():
         document_title = Path(doc["display_name"]).stem
+        units_by_partition: dict[int | None, list[Any]] = {}
+        for unit in units:
+            pid = unit["partition_id"]
+            units_by_partition.setdefault(int(pid) if pid is not None else None, []).append(
+                unit
+            )
+        capsule_reconcile = reconcile_missing_style_capsules(
+            db,
+            document_id=document_id,
+            partitions=partitions,
+            units_by_partition=units_by_partition,
+            artifact_dir=artifact_dir,
+        )
         assembled = [
             {
                 "unit_key": str(u["unit_key"]),
@@ -490,6 +582,7 @@ def run_translate_stage(
             "mode": "partition_cache",
             "manifest": str(manifest_path),
             "skipped_all": True,
+            "capsule_reconcile": capsule_reconcile,
             "partitions": [],
         }
 
