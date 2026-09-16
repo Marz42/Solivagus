@@ -9,6 +9,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Pandoc 规范化：先保护 fenced/inline code，再改 HTML img；inline math 排除金额歧义与转义 `$`。
+- Capsule JSON 自愈改为校验完整 payload（含重算 hash）；坏字段类型触发重写；soak_verify 同步。
+- Provider 入口统一写入 `provider-requests.jsonl`；soak 零调用以该日志为准，attempts 缩减不再误报通过。
 - OCR Markdown 规范化为 Pandoc 原生：居中 HTML `<img>` → `![…](…){width=…}`；`$  expr  $` → `$expr$`，避免 XeLaTeX PDF 丢图与 `\circ` text-mode Missing character。
 - CI 安装改为 `pip install ".[dev]"`；`pyproject`/`solivagus.__version__` 与根 `VERSION` 对齐。
 - 单文档多 Partition 共用一个事件循环，避免跨 loop 复用 `ConcurrencyGate`。

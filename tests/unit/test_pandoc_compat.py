@@ -386,6 +386,27 @@ class TestPandocCompatNormalize(unittest.TestCase):
         self.assertIn("$$  x + y  $$", out)
         self.assertIn("$  keep  $", out)
 
+    def test_fenced_html_img_not_converted(self) -> None:
+        raw = "```html\n<img src=\"example.png\">\n```\n"
+        out = normalize_for_pandoc(raw)
+        self.assertIn('<img src="example.png">', out)
+        self.assertNotIn("![Image]", out)
+
+    def test_inline_code_math_not_converted(self) -> None:
+        raw = "Use `$ x $` in docs."
+        out = normalize_for_pandoc(raw)
+        self.assertEqual(out, "Use `$ x $` in docs.")
+
+    def test_currency_dollars_not_converted(self) -> None:
+        raw = "Price $5 and $10."
+        out = normalize_for_pandoc(raw)
+        self.assertEqual(out, "Price $5 and $10.")
+
+    def test_prose_spaced_ident_still_tightened(self) -> None:
+        raw = "variable $ x $ here"
+        out = normalize_for_pandoc(raw)
+        self.assertEqual(out, "variable $x$ here")
+
     def test_normalize_combined_and_structure_image(self) -> None:
         raw = (
             '<div style="text-align: center;">'

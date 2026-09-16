@@ -10,6 +10,7 @@ from solivagus.config import Settings
 from solivagus.database import Database
 from solivagus.models import DocumentStatus, UnitStatus
 from solivagus.providers.openai_compatible import FatalProviderError, call_chat_api
+from solivagus.providers.request_log import provider_log_scope
 from solivagus.qa.checks import check_unit
 from solivagus.qa.models import QAFinding, QAReportSummary, Severity, UnitQAResult
 from solivagus.qa.repair import repair_unit
@@ -18,6 +19,7 @@ from solivagus.structure.html_tables import translate_html_tables_in_markdown
 from solivagus.structure.references import apply_references_mode
 from solivagus.style.capsule import StyleCapsule
 from solivagus.util.text import sha256_text
+from solivagus.workspace import workspace_root
 
 
 ChatFn = Callable[..., tuple[str, str | None, dict[str, Any]]]
@@ -28,6 +30,25 @@ class QAStageError(RuntimeError):
 
 
 def run_qa_stage(
+    db: Database,
+    *,
+    document_id: int,
+    settings: Settings,
+    chat_fn: ChatFn | None = None,
+    force: bool = False,
+) -> dict[str, Any]:
+    log_path = workspace_root(settings.workspace) / "provider-requests.jsonl"
+    with provider_log_scope(log_path):
+        return _run_qa_stage_unguarded(
+            db,
+            document_id=document_id,
+            settings=settings,
+            chat_fn=chat_fn,
+            force=force,
+        )
+
+
+def _run_qa_stage_unguarded(
     db: Database,
     *,
     document_id: int,

@@ -4,6 +4,9 @@ PaddleOCR-VL / PaddleX emit centered HTML <img> and spaced inline math ($ ... $)
 Pandoc treats those as RawInline HTML / plain Str, so XeLaTeX drops figures and
 runs \\circ in text mode. Canonical Solivagus Markdown uses Pandoc Image syntax
 and tight $math$ delimiters instead.
+
+Code fences / inline code are protected before any rewrite. Currency-like `$…$`
+pairs are left alone (conservative).
 """
 
 from __future__ import annotations
@@ -23,7 +26,6 @@ _CENTERED_IMG_DIV_RE = re.compile(
     re.IGNORECASE | re.DOTALL | re.VERBOSE,
 )
 
-# Bare <img ...> (self-closing or not)
 _BARE_IMG_RE = re.compile(
     r"<img\b([^>]*)>",
     re.IGNORECASE | re.DOTALL,
@@ -34,10 +36,23 @@ _ATTR_RE = re.compile(
     re.DOTALL,
 )
 
+_FENCED_CODE_RE = re.compile(r"(?ms)^```.*?^```\s*$|^~~~.*?^~~~\s*$")
+_INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
+_DISPLAY_DOLLAR_RE = re.compile(r"\$\$.*?\$\$", re.DOTALL)
+_DISPLAY_BRACKET_RE = re.compile(r"\\\[.*?\\\]", re.DOTALL)
+_ESCAPED_DOLLAR_RE = re.compile(r"\\\$")
+
 # Inline $ ... $ with optional whitespace inside delimiters (not $$).
 _SPACED_INLINE_MATH_RE = re.compile(
     r"(?<!\$)\$(?!\$)\s*((?:\\.|[^$\n])+?)\s*\$(?!\$)",
 )
+
+# TeX / math signals — refuse plain multi-word / money-like bodies.
+_MATH_SIGNAL_RE = re.compile(
+    r"[\\^_{}=]|\\[a-zA-Z]+|[A-Za-z][_^]|[_^]\{|[+\-*/]=|[≤≥≠∈∑∫]"
+)
+_MONEY_OR_NUMBER_RE = re.compile(r"^[\d.,\s]+$")
+_SHORT_IDENT_RE = re.compile(r"^[A-Za-z][A-Za-z0-9]{0,7}$")
 
 
 def _attr_map(attr_blob: str) -> dict[str, str]:
@@ -53,14 +68,41 @@ def _img_attrs_to_pandoc(attr_blob: str) -> str:
     if not src:
         return ""
     alt = (attrs.get("alt") or "Image").strip() or "Image"
-    # Escape ] and ) lightly for markdown safety
     alt = alt.replace("]", "\\]")
     width = (attrs.get("width") or "").strip()
     link = f"![{alt}]({src})"
     if width:
-        # Pandoc attribute syntax: {width=81%}
         link += f"{{width={width}}}"
     return link
+
+
+def _stash_regions(
+    text: str,
+    patterns: list[re.Pattern[str]],
+    *,
+    prefix: str,
+) -> tuple[str, dict[str, str]]:
+    placeholders: dict[str, str] = {}
+    counter = 0
+    protected = text
+    for pattern in patterns:
+        def repl(m: re.Match[str], _p=pattern) -> str:
+            nonlocal counter
+            counter += 1
+            token = f"@@{prefix}_{counter:05d}@@"
+            placeholders[token] = m.group(0)
+            return token
+
+        protected = pattern.sub(repl, protected)
+    return protected, placeholders
+
+
+def _restore(text: str, placeholders: dict[str, str]) -> str:
+    out = text
+    # Restore longest tokens first in case of accidental nesting (should not happen).
+    for token in sorted(placeholders, key=len, reverse=True):
+        out = out.replace(token, placeholders[token])
+    return out
 
 
 def html_images_to_pandoc(markdown: str) -> str:
@@ -79,45 +121,58 @@ def html_images_to_pandoc(markdown: str) -> str:
     return _BARE_IMG_RE.sub(_bare, text)
 
 
+def _looks_like_inline_math(body: str) -> bool:
+    """Conservative: only tighten delimiter spacing when body is clearly math-like."""
+    b = body.strip()
+    if not b:
+        return False
+    if _MONEY_OR_NUMBER_RE.fullmatch(b):
+        return False
+    if _MATH_SIGNAL_RE.search(b):
+        return True
+    # "$ x $" / "$x$" style single identifiers — only when already spaced in source
+    # and not multi-word English ("5 and").
+    if " " in b:
+        return False
+    if _SHORT_IDENT_RE.fullmatch(b):
+        return True
+    return False
+
+
 def normalize_inline_math_delimiters(markdown: str) -> str:
-    """Rewrite `$  expr  $` → `$expr$` so Pandoc recognizes InlineMath."""
+    """Rewrite `$  expr  $` → `$expr$` when *expr* looks like math (not currency)."""
 
     def _fix(match: re.Match[str]) -> str:
-        body = match.group(1).strip()
-        if not body:
+        body = match.group(1)
+        if not _looks_like_inline_math(body):
             return match.group(0)
-        return f"${body}$"
+        return f"${body.strip()}$"
 
-    # Protect fenced code / display $$ first via temporary placeholders.
-    placeholders: dict[str, str] = {}
-    counter = 0
-
-    def _stash(pattern: re.Pattern[str], text: str) -> str:
-        nonlocal counter
-
-        def repl(m: re.Match[str]) -> str:
-            nonlocal counter
-            counter += 1
-            token = f"@@PANDOC_PROTECT_{counter:05d}@@"
-            placeholders[token] = m.group(0)
-            return token
-
-        return pattern.sub(repl, text)
-
-    protected = markdown
-    protected = _stash(re.compile(r"(?ms)^```.*?^```\s*$|^~~~.*?^~~~\s*$"), protected)
-    protected = _stash(re.compile(r"\$\$.*?\$\$", re.DOTALL), protected)
-    protected = _stash(re.compile(r"\\\[.*?\\\]", re.DOTALL), protected)
+    protected, placeholders = _stash_regions(
+        markdown,
+        [
+            _FENCED_CODE_RE,
+            _INLINE_CODE_RE,
+            _DISPLAY_DOLLAR_RE,
+            _DISPLAY_BRACKET_RE,
+            _ESCAPED_DOLLAR_RE,
+        ],
+        prefix="PANDOC_MATH",
+    )
     protected = _SPACED_INLINE_MATH_RE.sub(_fix, protected)
-    for token, original in placeholders.items():
-        protected = protected.replace(token, original)
-    return protected
+    return _restore(protected, placeholders)
 
 
 def normalize_for_pandoc(markdown: str) -> str:
     """Canonical post-OCR Markdown normalization for Pandoc-native writers."""
     if not markdown:
         return markdown
-    text = html_images_to_pandoc(markdown)
-    text = normalize_inline_math_delimiters(text)
-    return text
+    # Protect code (and display math) before any HTML-img rewrite.
+    protected, placeholders = _stash_regions(
+        markdown,
+        [_FENCED_CODE_RE, _INLINE_CODE_RE],
+        prefix="PANDOC_CODE",
+    )
+    protected = html_images_to_pandoc(protected)
+    protected = normalize_inline_math_delimiters(protected)
+    return _restore(protected, placeholders)

@@ -6,6 +6,8 @@ import json
 from typing import Any
 from urllib import error, request
 
+from solivagus.providers.request_log import record_provider_request
+
 
 class ProviderError(RuntimeError):
     def __init__(self, message: str, *, retry_after: float | None = None) -> None:
@@ -108,6 +110,12 @@ def call_chat_api(
     disable_thinking: bool = True,
 ) -> tuple[str, str | None, dict[str, Any]]:
     endpoint = build_chat_endpoint(api_base)
+    record_provider_request(
+        kind="chat",
+        model=model,
+        endpoint=endpoint,
+        user_id=user_id,
+    )
     if messages is not None:
         payload_messages = messages
     else:

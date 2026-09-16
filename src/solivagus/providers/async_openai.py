@@ -16,6 +16,7 @@ from solivagus.providers.openai_compatible import (
     parse_chat_response,
     parse_retry_after,
 )
+from solivagus.providers.request_log import record_provider_request
 
 
 async def call_chat_api_async(
@@ -34,6 +35,12 @@ async def call_chat_api_async(
     client: httpx.AsyncClient | None = None,
 ) -> tuple[str, str | None, dict[str, Any]]:
     endpoint = build_chat_endpoint(api_base)
+    record_provider_request(
+        kind="chat_async",
+        model=model,
+        endpoint=endpoint,
+        user_id=user_id,
+    )
     if messages is not None:
         payload_messages = messages
     else:

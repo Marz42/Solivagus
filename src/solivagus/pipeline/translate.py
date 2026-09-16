@@ -29,7 +29,8 @@ from solivagus.util.markdown import (
     split_passthrough_segments,
 )
 from solivagus.util.text import atomic_write_json, atomic_write_text, sha256_text
-from solivagus.workspace import translation_cache_root
+from solivagus.workspace import translation_cache_root, workspace_root
+from solivagus.providers.request_log import provider_log_scope
 
 
 ChatFn = Callable[..., tuple[str, str | None, dict[str, Any]]]
@@ -54,25 +55,51 @@ def _capsule_json_path(capsule_dir: Path, version: int) -> Path:
 def _capsule_json_matches(
     path: Path,
     *,
-    expected_hash: str,
-    version: int,
+    capsule: StyleCapsule,
     part_id: int,
 ) -> bool:
+    """True only when JSON equals the canonical DB payload (content, not declared hash alone)."""
     if not path.is_file():
         return False
+    expected = _capsule_json_payload(capsule, part_id=part_id)
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, UnicodeError):
         return False
     if not isinstance(raw, dict):
         return False
-    if str(raw.get("content_hash") or "") != expected_hash:
+    try:
+        version = int(raw["version"])
+        part = int(raw["source_partition_id"])
+        style_rules = list(raw["style_rules"])
+        terminology = dict(raw["terminology"])
+        examples = list(raw["examples"])
+        boundary = dict(raw["boundary_context"])
+        declared_hash = str(raw.get("content_hash") or "")
+    except (TypeError, ValueError, KeyError, AttributeError):
         return False
-    if int(raw.get("version") or -1) != int(version):
+    rebuilt = StyleCapsule(
+        version=version,
+        style_rules=style_rules,
+        terminology=terminology,
+        examples=examples,
+        boundary_context=boundary,
+    )
+    recomputed = rebuilt.content_hash()
+    if declared_hash != recomputed:
         return False
-    if int(raw.get("source_partition_id") or -1) != int(part_id):
+    if recomputed != expected["content_hash"]:
         return False
-    return True
+    if part != int(part_id):
+        return False
+    # Full semantic equality vs DB capsule (catches stale hash + mutated fields).
+    return (
+        version == int(expected["version"])
+        and style_rules == expected["style_rules"]
+        and terminology == expected["terminology"]
+        and examples == expected["examples"]
+        and boundary == expected["boundary_context"]
+    )
 
 
 def _ensure_capsule_json_artifact(
@@ -87,9 +114,7 @@ def _ensure_capsule_json_artifact(
     capsule_dir.mkdir(parents=True, exist_ok=True)
     path = _capsule_json_path(capsule_dir, capsule.version)
     expected = capsule.content_hash()
-    if _capsule_json_matches(
-        path, expected_hash=expected, version=capsule.version, part_id=part_id
-    ):
+    if _capsule_json_matches(path, capsule=capsule, part_id=part_id):
         return False
     atomic_write_json(path, _capsule_json_payload(capsule, part_id=part_id))
     db.record_artifact(
@@ -555,6 +580,29 @@ def _translate_without_partitions(
 
 
 def run_translate_stage(
+    db: Database,
+    *,
+    document_id: int,
+    settings: Settings,
+    force: bool = False,
+    strict: bool = False,
+    chat_fn: ChatFn | None = None,
+    global_gate: Gate | None = None,
+) -> dict[str, Any]:
+    log_path = workspace_root(settings.workspace) / "provider-requests.jsonl"
+    with provider_log_scope(log_path):
+        return _run_translate_stage_unguarded(
+            db,
+            document_id=document_id,
+            settings=settings,
+            force=force,
+            strict=strict,
+            chat_fn=chat_fn,
+            global_gate=global_gate,
+        )
+
+
+def _run_translate_stage_unguarded(
     db: Database,
     *,
     document_id: int,

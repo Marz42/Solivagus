@@ -97,7 +97,7 @@ def _count_attempts(conn: sqlite3.Connection, document_id: int) -> int:
     return int(cur.fetchone()["n"])
 
 
-def _attempt_snapshot(conn: sqlite3.Connection) -> dict[str, Any]:
+def _attempt_snapshot(conn: sqlite3.Connection, *, workspace: Path) -> dict[str, Any]:
     docs = conn.execute("SELECT id, source_path, status FROM documents").fetchall()
     by_doc: dict[str, Any] = {}
     for doc in docs:
@@ -133,7 +133,19 @@ def _attempt_snapshot(conn: sqlite3.Connection) -> dict[str, Any]:
             },
             "attempt_ids": [int(a["id"]) for a in attempts],
         }
-    return {"documents": by_doc}
+    from solivagus.providers.request_log import count_provider_log_lines
+    from solivagus.workspace import workspace_root
+
+    log_path = workspace_root(workspace) / "provider-requests.jsonl"
+    return {
+        "documents": by_doc,
+        "provider_log_path": str(log_path),
+        "provider_log_lines": count_provider_log_lines(log_path),
+        "note": (
+            "translation_attempts excludes warm-up/probe/repair unless also logged; "
+            "prefer provider_log_lines for zero-API proof"
+        ),
+    }
 
 
 def _verify_capsule_pair(
@@ -183,25 +195,53 @@ def _verify_capsule_pair(
         )
         return checks
 
-    json_hash = str(raw.get("content_hash") or "")
-    json_ver = int(raw.get("version") or -1)
-    json_part = int(raw.get("source_partition_id") or -1)
+    if not isinstance(raw, dict):
+        checks.append(CheckResult("capsule_db_json_bind", False, f"v{version} JSON not an object"))
+        return checks
+
+    try:
+        json_ver = int(raw["version"])
+        json_part = int(raw["source_partition_id"])
+        rebuilt = StyleCapsule(
+            version=json_ver,
+            style_rules=list(raw["style_rules"]),
+            terminology=dict(raw["terminology"]),
+            examples=list(raw["examples"]),
+            boundary_context=dict(raw["boundary_context"]),
+        )
+        json_recomputed = rebuilt.content_hash()
+        declared = str(raw.get("content_hash") or "")
+    except (TypeError, ValueError, KeyError, AttributeError) as exc:
+        checks.append(
+            CheckResult(
+                "capsule_db_json_bind",
+                False,
+                f"v{version} JSON field/type error: {exc}",
+            )
+        )
+        return checks
+
     ok = (
-        json_hash == db_hash
+        declared == json_recomputed
+        and json_recomputed == db_hash
         and json_ver == version
         and (part_id is None or json_part == int(part_id))
+        and rebuilt.style_rules == capsule.style_rules
+        and rebuilt.terminology == capsule.terminology
+        and rebuilt.examples == capsule.examples
+        and rebuilt.boundary_context == capsule.boundary_context
     )
     checks.append(
         CheckResult(
             "capsule_db_json_bind",
             ok,
             (
-                f"v{version} DB<->JSON OK (partition={part_id})"
+                f"v{version} DB<->JSON payload OK (partition={part_id})"
                 if ok
                 else (
-                    f"v{version} mismatch hash/ver/part "
-                    f"db=({db_hash[:12]}...,{version},{part_id}) "
-                    f"json=({json_hash[:12]}...,{json_ver},{json_part})"
+                    f"v{version} payload mismatch "
+                    f"db_hash={db_hash[:12]}... json_recomputed={json_recomputed[:12]}... "
+                    f"declared={declared[:12]}... ver/part=({json_ver},{json_part})"
                 )
             ),
         )
@@ -414,7 +454,15 @@ def _safe_print(text: str) -> None:
         print(text.encode(enc, errors="replace").decode(enc, errors="replace"))
 
 
-def _print_report(reports: list[DocumentReport], *, compare: dict[str, Any] | None) -> int:
+def _print_report(
+    reports: list[DocumentReport],
+    *,
+    compare: dict[str, Any] | None,
+    workspace: Path,
+) -> int:
+    from solivagus.providers.request_log import count_provider_log_lines
+    from solivagus.workspace import workspace_root
+
     errors = 0
     for r in reports:
         _safe_print(f"\n=== document {r.document_id} ===")
@@ -433,18 +481,53 @@ def _print_report(reports: list[DocumentReport], *, compare: dict[str, Any] | No
                 _safe_print("  [WARN] compare: no prior snapshot for this document_id")
             else:
                 delta = r.attempt_count - int(prev.get("attempt_rows", 0))
-                # New provider traffic only; shrink can happen if QA/rebuild rewrites rows.
-                ok = delta <= 0
+                # Strict: any growth is new unit traffic; shrink means rows were rebuilt
+                # (attempts table alone still misses warm-up — see provider_log check).
                 if delta > 0:
                     errors += 1
-                _safe_print(
-                    f"  [{'PASS' if ok else 'FAIL'}] provider_calls_delta: "
-                    f"{delta} (want <=0 on re-run of complete docs; >0 means new API calls)"
-                )
+                    _safe_print(
+                        f"  [FAIL] translation_attempts_delta: {delta} "
+                        f"(new unit attempt rows)"
+                    )
+                elif delta < 0:
+                    errors += 1
+                    _safe_print(
+                        f"  [FAIL] translation_attempts_delta: {delta} "
+                        f"(rows shrunk; table rebuilt — not proof of zero API)"
+                    )
+                else:
+                    _safe_print(
+                        "  [PASS] translation_attempts_delta: 0 "
+                        "(unit attempts only; warm-up not covered here)"
+                    )
                 _safe_print(
                     f"  [info] prior_attempts={prev.get('attempt_rows')} "
                     f"prior_status={prev.get('status')}"
                 )
+
+    if compare is not None:
+        log_path = workspace_root(workspace) / "provider-requests.jsonl"
+        prior_lines = int(compare.get("provider_log_lines") or 0)
+        now_lines = count_provider_log_lines(log_path)
+        log_delta = now_lines - prior_lines
+        if not log_path.is_file() and prior_lines == 0:
+            errors += 1
+            _safe_print(
+                "\n  [FAIL] provider_log: missing "
+                f"{log_path} — cannot prove zero API "
+                "(warm-up/probe/repair are not in translation_attempts)"
+            )
+        elif log_delta != 0:
+            errors += 1
+            _safe_print(
+                f"\n  [FAIL] provider_log_delta: {log_delta} "
+                f"(prior={prior_lines} now={now_lines}; want 0)"
+            )
+        else:
+            _safe_print(
+                f"\n  [PASS] provider_log_delta: 0 "
+                f"(lines={now_lines} at {log_path})"
+            )
 
     _safe_print(f"\n=== summary: {len(reports)} docs, {errors} error(s) ===")
     return 1 if errors else 0
@@ -529,7 +612,7 @@ def main() -> int:
     conn.row_factory = sqlite3.Row
 
     if args.snapshot_attempts:
-        snap = _attempt_snapshot(conn)
+        snap = _attempt_snapshot(conn, workspace=args.workspace)
         args.snapshot_attempts.parent.mkdir(parents=True, exist_ok=True)
         args.snapshot_attempts.write_text(
             json.dumps(snap, ensure_ascii=False, indent=2) + "\n",
@@ -580,7 +663,7 @@ def main() -> int:
         )
         print(f"wrote report: {args.json_out}")
 
-    code = _print_report(reports, compare=compare_payload)
+    code = _print_report(reports, compare=compare_payload, workspace=args.workspace)
     conn.close()
     return code
 
