@@ -262,6 +262,73 @@ class QAStageIntegrationTests(unittest.TestCase):
                 self.assertIn("0.05", unit["translation_text"])
                 self.assertEqual(unit["warning_flags"], "qa_repaired")
 
+    def test_repair_commits_before_next_api_call(self) -> None:
+        """Two repairs: second entry must not hold a write txn; peer can write."""
+        import sqlite3
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact = root / "doc.solivagus"
+            artifact.mkdir()
+            clear_settings_cache()
+            settings = get_settings()
+            settings.workspace = root
+            settings.qa_auto_repair = True
+            settings.qa_max_repair_attempts = 1
+            settings.qa_strict = False
+            settings.html_table_mode = "keep"
+            settings.llm_api_key = "test"
+
+            txn_open_at_repair: list[bool] = []
+            peer_errors: list[BaseException] = []
+            peer_ok = 0
+
+            with Database(state_db_path(root)) as db:
+                doc_id = self._seed(
+                    db,
+                    artifact,
+                    [
+                        {
+                            "unit_key": "u1",
+                            "source_text": "Value is 0.05.",
+                            "translation_text": "结果为 0.5。",
+                        },
+                        {
+                            "unit_key": "u2",
+                            "source_text": "Score is 0.05.",
+                            "translation_text": "得分为 0.5。",
+                        },
+                    ],
+                )
+                db_path = state_db_path(root)
+
+                def fake_chat(**kwargs):
+                    nonlocal peer_ok
+                    txn_open_at_repair.append(bool(db.conn.in_transaction))
+                    if len(txn_open_at_repair) == 2:
+                        peer = sqlite3.connect(str(db_path), timeout=0.2)
+                        peer.execute("PRAGMA busy_timeout = 200")
+                        try:
+                            peer.execute(
+                                "UPDATE documents SET updated_at = ? WHERE id = ?",
+                                ("peer-ok", doc_id),
+                            )
+                            peer.commit()
+                            peer_ok += 1
+                        except Exception as exc:  # noqa: BLE001
+                            peer_errors.append(exc)
+                        finally:
+                            peer.close()
+                    return "结果为 0.05。", "stop", {}
+
+                result = run_qa_stage(
+                    db, document_id=doc_id, settings=settings, chat_fn=fake_chat
+                )
+                self.assertGreaterEqual(result["repaired"], 2)
+                self.assertEqual(txn_open_at_repair, [False, False], txn_open_at_repair)
+                self.assertEqual(peer_errors, [], peer_errors)
+                self.assertEqual(peer_ok, 1)
+
     def test_errors_are_unit_localizable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

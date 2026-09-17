@@ -163,6 +163,230 @@ class BatchSupervisorTests(unittest.TestCase):
                 ]
                 self.assertEqual(len(failed), 1)
 
+    def test_batch_rerun_preserves_done_units_zero_provider(self) -> None:
+        """Full batch twice: OCR cache hit keeps DONE/bindings; second translate is zero-API."""
+        from unittest import mock
+
+        from solivagus.ocr.checkpoints import OcrConfig, write_done
+        from solivagus.ocr.preflight import PreflightResult
+        from solivagus.ocr.runner import run_ocr_stage
+        from solivagus.util.text import sha256_text
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            batch_dir = root / "pdfs"
+            batch_dir.mkdir()
+            pdf = batch_dir / "paper.pdf"
+            pdf.write_bytes(b"%PDF-preserve")
+
+            clear_settings_cache()
+            settings = get_settings()
+            settings.workspace = root
+            settings.batch_dir = batch_dir
+            settings.llm_api_key = "test"
+
+            worker_calls = 0
+            provider_calls = 0
+            snapshot_after_first: list[tuple] = []
+
+            def fake_worker(
+                pdf_path: Path,
+                artifact_dir: Path,
+                batch_index: int,
+                page_range,
+                config: OcrConfig,
+                config_hash: str,
+            ) -> dict:
+                nonlocal worker_calls
+                worker_calls += 1
+                directory = artifact_dir / "ocr" / f"batch-{batch_index:04d}"
+                directory.mkdir(parents=True, exist_ok=True)
+                text = "<!-- source-page: 1 -->\n\nHello preserve.\n"
+                (directory / "source.md").write_text(text, encoding="utf-8")
+                write_done(
+                    directory,
+                    batch_index=batch_index,
+                    page_range=page_range,
+                    config_hash=config_hash,
+                    source_hash=sha256_text(text),
+                    extra={"failed_pages": []},
+                )
+                return {
+                    "batch_index": batch_index,
+                    "page_start": page_range.start,
+                    "page_end": page_range.end,
+                    "failed_pages": [],
+                    "config_hash": config_hash,
+                }
+
+            preflight = PreflightResult(
+                path=str(pdf),
+                page_count=1,
+                encrypted=False,
+                source_sha256="sha-batch-preserve",
+            )
+
+            def ocr_fn(db, **kwargs):
+                with mock.patch(
+                    "solivagus.ocr.runner.preflight_pdf", return_value=preflight
+                ):
+                    return run_ocr_stage(
+                        db,
+                        pdf_path=kwargs["pdf_path"],
+                        workspace=kwargs["workspace"],
+                        config=OcrConfig(batch_pages=8),
+                        chunk_chars=kwargs.get("chunk_chars", 50_000),
+                        force=False,
+                        prevent_sleep=False,
+                        acquire_supervisor_lock=False,
+                        worker_fn=fake_worker,
+                    )
+
+            def plan_fn(db, **kwargs):
+                document_id = int(kwargs["document_id"])
+                units = db.list_units(document_id)
+                if units and all(u["partition_id"] is not None for u in units):
+                    return {"skipped": True, "unit_count": len(units)}
+                part_ids = db.replace_partitions(
+                    document_id,
+                    [
+                        {
+                            "sequence_index": 1,
+                            "source_tokens": 10,
+                            "context_tokens": 0,
+                            "unit_count": len(units),
+                            "user_id": "batch-user",
+                            "warmup_status": "done",
+                            "expected_cache_tokens": 10,
+                            "status": "complete",
+                        }
+                    ],
+                )
+                db.replace_units(
+                    document_id,
+                    [
+                        {
+                            "unit_key": str(u["unit_key"]),
+                            "sequence_index": int(u["sequence_index"]),
+                            "partition_id": part_ids[0],
+                            "source_text": str(u["source_text"]),
+                            "source_hash": str(u["source_hash"]),
+                            "status": str(u["status"]),
+                            "translation_text": u["translation_text"],
+                            "translation_hash": u["translation_hash"],
+                            "source_file": u["source_file"],
+                        }
+                        for u in units
+                    ],
+                )
+                return {"skipped": False, "unit_count": len(units), "partition_id": part_ids[0]}
+
+            def translate_fn(db, **kwargs):
+                nonlocal provider_calls, snapshot_after_first
+                document_id = int(kwargs["document_id"])
+                units = db.list_units(document_id)
+                if units and all(
+                    str(u["status"]) == DocumentStatus.TRANSLATION_COMPLETE.value
+                    or str(u["status"]) == "done"
+                    for u in units
+                ) and all(u["translation_text"] for u in units):
+                    # Already translated — zero provider.
+                    return {"translated": 0, "skipped": len(units)}
+                provider_calls += 1
+                db.replace_units(
+                    document_id,
+                    [
+                        {
+                            "unit_key": str(u["unit_key"]),
+                            "sequence_index": int(u["sequence_index"]),
+                            "partition_id": u["partition_id"],
+                            "source_text": str(u["source_text"]),
+                            "source_hash": str(u["source_hash"]),
+                            "status": "done",
+                            "translation_text": "已完成译文",
+                            "translation_hash": sha256_text("已完成译文"),
+                            "source_file": u["source_file"],
+                        }
+                        for u in units
+                    ],
+                )
+                db.update_document_status(
+                    document_id,
+                    status=DocumentStatus.TRANSLATION_COMPLETE.value,
+                    translation_status="complete",
+                )
+                artifact = Path(str(db.fetchone(
+                    "SELECT artifact_dir FROM documents WHERE id = ?", (document_id,)
+                )["artifact_dir"]))
+                atomic_write_json(
+                    artifact / "usage-report.json",
+                    {
+                        "totals": {
+                            "prompt_tokens": 1,
+                            "cache_hit_tokens": 0,
+                            "cache_miss_tokens": 1,
+                            "completion_tokens": 1,
+                            "api_calls": 1,
+                            "local_cache_hits": 0,
+                        }
+                    },
+                )
+                snapshot_after_first = [
+                    (str(u["status"]), u["translation_text"], u["partition_id"])
+                    for u in db.list_units(document_id)
+                ]
+                return {"translated": len(units), "skipped": 0}
+
+            def qa_fn(db, **kwargs):
+                document_id = int(kwargs["document_id"])
+                db.update_document_status(
+                    document_id,
+                    status=DocumentStatus.QA_COMPLETE.value,
+                    qa_status="pass",
+                )
+                return {"qa_status": "pass"}
+
+            run1 = run_batch(
+                settings=settings,
+                batch_dir=batch_dir,
+                profile="conservative",
+                continue_on_error=False,
+                prevent_sleep=False,
+                ocr_fn=ocr_fn,
+                plan_fn=plan_fn,
+                translate_fn=translate_fn,
+                qa_fn=qa_fn,
+            )
+            self.assertEqual(run1["failed"], 0)
+            self.assertEqual(worker_calls, 1)
+            self.assertEqual(provider_calls, 1)
+            self.assertTrue(snapshot_after_first)
+            self.assertEqual(snapshot_after_first[0][0], "done")
+            self.assertEqual(snapshot_after_first[0][1], "已完成译文")
+            self.assertIsNotNone(snapshot_after_first[0][2])
+
+            run2 = run_batch(
+                settings=settings,
+                batch_dir=batch_dir,
+                profile="conservative",
+                continue_on_error=False,
+                prevent_sleep=False,
+                ocr_fn=ocr_fn,
+                plan_fn=plan_fn,
+                translate_fn=translate_fn,
+                qa_fn=qa_fn,
+            )
+            self.assertEqual(run2["failed"], 0)
+            self.assertEqual(worker_calls, 1, "second OCR must be cache-only")
+            self.assertEqual(provider_calls, 1, "second translate must be zero-provider")
+            with Database(state_db_path(root)) as db:
+                rows = db.list_units(int(db.list_documents()[0]["id"]))
+                after = [
+                    (str(u["status"]), u["translation_text"], u["partition_id"])
+                    for u in rows
+                ]
+                self.assertEqual(after, snapshot_after_first)
+
 
 class ManifestUsageTests(unittest.TestCase):
     def test_write_manifest_and_usage(self) -> None:

@@ -68,12 +68,13 @@ busy_timeout 过短是辅助因素，不是根因。
 
 已落地（代码侧 mitigation，待同配置四本回归）：
 
-1. `ocr/runner.py`：`_record_batch` 立即 `commit`；调用 `worker()` 前再 `commit`。
+1. `ocr/runner.py`：`_record_batch` 立即 `commit`；调用 `worker()` 前再 `commit`；**OCR 缓存命中且未跑 worker 时跳过 `_seed_units_from_source`**，保留 DONE/译文/partition。
 2. `batch/supervisor.py`：`_persist_document_failed` 短退避重试；OCR/translate 失败记录落库错误而非静默吞掉。
 3. `pipeline/translate.py`：`TRANSLATION_RUNNING` 之后非 FatalProvider 异常也尽量落 `failed`。
-4. `database.py`：`busy_timeout=30000` + `connect(timeout=30.0)`（辅助，不得单独关单）。
+4. `qa/runner.py`：repair 成功后立即 `commit`；下次 repair API 前无未提交写事务。
+5. `database.py`：`busy_timeout=30000` + `connect(timeout=30.0)`（辅助，不得单独关单）。
 
-验证：`python -m unittest tests.unit.test_sqlite_batch_lock`（4/4 OK）。
+验证：`test_sqlite_batch_lock`、`test_repair_commits_before_next_api_call`、`test_cache_hit_preserves_done_units_and_bindings`、`test_batch_rerun_preserves_done_units_zero_provider`。
 
 仍需：同四本固定配置中断恢复 + 完成态零请求重跑；正式 ≥12h SOAK。
 
@@ -86,4 +87,4 @@ busy_timeout 过短是辅助因素，不是根因。
 
 # Status
 
-mitigated-in-code — 小并发复现与短事务/失败落库已落地；待同配置四本回归后再考虑关 issue / 进 SOAK。
+mitigated-in-code — 小并发复现与短事务/失败落库已落地；QA repair 跨请求持锁与 OCR 缓存命中清 Unit 两处 P1 已修。待同配置四本回归后再考虑关 issue / 进 SOAK。

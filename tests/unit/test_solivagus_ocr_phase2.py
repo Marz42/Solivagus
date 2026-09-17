@@ -153,6 +153,138 @@ class OcrRunnerTests(unittest.TestCase):
                 )
                 self.assertIsNotNone(reused)
 
+    def test_cache_hit_preserves_done_units_and_bindings(self) -> None:
+        """OCR checkpoint hit must not wipe DONE translations / partition_id."""
+        from solivagus.models import DocumentStatus, UnitStatus
+        from solivagus.util.text import sha256_text as h
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pdf = root / "doc.pdf"
+            pdf.write_bytes(b"%PDF-1.4 fake")
+            artifact = root / "doc.solivagus"
+            calls: list[int] = []
+
+            def fake_worker(
+                pdf_path: Path,
+                artifact_dir: Path,
+                batch_index: int,
+                page_range: PageRange,
+                config: OcrConfig,
+                config_hash: str,
+            ) -> dict:
+                calls.append(batch_index)
+                directory = artifact_dir / "ocr" / f"batch-{batch_index:04d}"
+                directory.mkdir(parents=True, exist_ok=True)
+                text = "\n".join(
+                    f"<!-- source-page: {page} -->\n\npage {page} body\n"
+                    for page in range(page_range.start, page_range.end + 1)
+                )
+                (directory / "source.md").write_text(text, encoding="utf-8")
+                write_done(
+                    directory,
+                    batch_index=batch_index,
+                    page_range=page_range,
+                    config_hash=config_hash,
+                    source_hash=sha256_text(text),
+                    extra={"failed_pages": []},
+                )
+                return {
+                    "batch_index": batch_index,
+                    "page_start": page_range.start,
+                    "page_end": page_range.end,
+                    "failed_pages": [],
+                    "config_hash": config_hash,
+                }
+
+            preflight = PreflightResult(
+                path=str(pdf),
+                page_count=1,
+                encrypted=False,
+                source_sha256="sha-preserve",
+            )
+            with mock.patch(
+                "solivagus.ocr.runner.preflight_pdf", return_value=preflight
+            ), Database(state_db_path(root)) as db:
+                first = run_ocr_stage(
+                    db,
+                    pdf_path=pdf,
+                    workspace=root,
+                    config=OcrConfig(batch_pages=8),
+                    worker_fn=fake_worker,
+                    artifact_dir=artifact,
+                    chunk_chars=50_000,
+                )
+                self.assertEqual(len(calls), 1)
+                self.assertTrue(first.get("ocr_worker_ran"))
+                units = db.list_units(int(first["document_id"]))
+                self.assertGreaterEqual(len(units), 1)
+                # Simulate post-plan / translate state.
+                part_ids = db.replace_partitions(
+                    int(first["document_id"]),
+                    [
+                        {
+                            "sequence_index": 1,
+                            "source_tokens": 10,
+                            "context_tokens": 0,
+                            "unit_count": len(units),
+                            "prefix_hash": None,
+                            "user_id": "u",
+                            "warmup_status": "done",
+                            "expected_cache_tokens": 10,
+                            "actual_probe_hit_tokens": 10,
+                            "status": "complete",
+                            "unit_keys": [str(u["unit_key"]) for u in units],
+                        }
+                    ],
+                )
+                db.replace_units(
+                    int(first["document_id"]),
+                    [
+                        {
+                            "unit_key": str(u["unit_key"]),
+                            "sequence_index": int(u["sequence_index"]),
+                            "partition_id": part_ids[0],
+                            "source_text": str(u["source_text"]),
+                            "source_hash": str(u["source_hash"]),
+                            "status": UnitStatus.DONE.value,
+                            "translation_text": "已完成译文",
+                            "translation_hash": h("已完成译文"),
+                            "source_file": u["source_file"],
+                        }
+                        for u in units
+                    ],
+                )
+                db.update_document_status(
+                    int(first["document_id"]),
+                    status=DocumentStatus.TRANSLATION_COMPLETE.value,
+                    translation_status="complete",
+                )
+                before = [
+                    (str(u["status"]), u["translation_text"], u["partition_id"])
+                    for u in db.list_units(int(first["document_id"]))
+                ]
+                self.assertEqual(before[0][0], UnitStatus.DONE.value)
+                self.assertEqual(before[0][1], "已完成译文")
+                self.assertEqual(before[0][2], part_ids[0])
+
+                second = run_ocr_stage(
+                    db,
+                    pdf_path=pdf,
+                    workspace=root,
+                    config=OcrConfig(batch_pages=8),
+                    worker_fn=fake_worker,
+                    artifact_dir=artifact,
+                    chunk_chars=50_000,
+                )
+                self.assertEqual(len(calls), 1, "cache hit must not re-run worker")
+                self.assertFalse(second.get("ocr_worker_ran"))
+                after = [
+                    (str(u["status"]), u["translation_text"], u["partition_id"])
+                    for u in db.list_units(int(first["document_id"]))
+                ]
+                self.assertEqual(after, before)
+
 
 class ReportTests(unittest.TestCase):
     def test_nightly_report(self) -> None:

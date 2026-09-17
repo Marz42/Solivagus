@@ -9,6 +9,8 @@
 ## [Unreleased]
 
 ### Fixed
+- QA repair：每个 Unit 修复成功后立即 commit，并在下一次 repair API 调用前释放写事务；回归见 `test_repair_commits_before_next_api_call`。
+- OCR 缓存命中：不再无条件 `_seed_units_from_source` 清空 DONE 译文与 partition 绑定；结构更新仍归 plan。回归见 OCR cache-hit 与 batch 双跑零 provider 测试。
 - Batch SQLite：OCR `_record_batch` 立即 commit、worker 前再 commit，避免未提交写事务跨 OCR 等待；supervisor `_persist_document_failed` 重试落库；translate 在 RUNNING 后异常尽量落 `failed`；busy_timeout 30s 仅作辅助。小并发复现见 `tests/unit/test_sqlite_batch_lock.py`。
 - soak_verify：成功终态禁止 pending/running；明确 failed 允许 pending、禁止孤儿 running；未完成不得当成功。
 - Pandoc 规范化：先保护 fenced/inline code，再改 HTML img；inline math 排除金额歧义与转义 `$`。

@@ -1,6 +1,6 @@
 coding_runtime_schema_version: '0.1'
 kind: coding_session
-snapshot_revision: 2
+snapshot_revision: 3
 session:
   session_id: SESSION-20260917-SQLITE-LOCK
   task_id: TASK-20260804-P5
@@ -11,7 +11,7 @@ session:
     remote_url: https://github.com/Marz42/Solivagus.git
   status: active
   started_at: '2026-09-17T10:55:07.340489+08:00'
-  updated_at: '2026-09-17T11:05:39.880011+08:00'
+  updated_at: '2026-09-17T11:20:16.406675+08:00'
   ended_at: null
   agent_id: cursor
-  current_checkpoint_id: CHECKPOINT-20260917-SQLITE-LOCK-REPRO
+  current_checkpoint_id: CHECKPOINT-20260917-QA-OCR-P1

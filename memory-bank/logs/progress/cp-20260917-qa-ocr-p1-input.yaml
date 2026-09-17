@@ -1,0 +1,11 @@
+summary: Fix QA repair write-lock and OCR cache-hit unit wipe
+completed_work:
+  - QA repair commits before/after each unit so peer writers succeed during second repair wait
+  - OCR cache hit skips _seed_units_from_source when units already exist
+  - Regression tests for QA peer write, OCR preserve DONE/bindings, batch double-run zero provider
+remaining_work:
+  - Same 4-book fixed-config recovery and zero-provider re-run
+  - Overnight SOAK after gates
+blockers: []
+next_steps:
+  - Run fixed-config 4-book recovery verification before formal SOAK

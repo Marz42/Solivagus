@@ -228,6 +228,7 @@ def run_ocr_stage(
         warnings = 0
         next_index = next_batch_index(artifact)
         already_covered = set() if force else covered_pages(artifact, config_hash=config_hash)
+        ran_worker = False
         # Include existing done batch indices for final assemble.
         if already_covered:
             ocr_root = artifact / "ocr"
@@ -290,6 +291,7 @@ def run_ocr_stage(
                     config,
                     config_hash,
                 )
+                ran_worker = True
                 completed_indices.append(batch_index)
                 already_covered.update(range(page_range.start, page_range.end + 1))
                 failed = list(result.get("failed_pages") or [])
@@ -306,6 +308,7 @@ def run_ocr_stage(
                     attempt_count=attempts + 1,
                 )
             except Exception as exc:  # noqa: BLE001
+                ran_worker = True
                 if attempts == 0:
                     queue.insert(0, (page_range, 1))
                     continue
@@ -357,12 +360,18 @@ def run_ocr_stage(
             pdf_name=pdf_path.name,
             script_version=__version__,
         )
-        unit_count = _seed_units_from_source(
-            db,
-            document_id=document_id,
-            artifact_dir=artifact,
-            chunk_chars=chunk_chars,
-        )
+        # Cache-hit OCR must not wipe DONE translations / partition bindings.
+        # Structural reseed belongs to plan when source actually changes.
+        existing_units = db.list_units(document_id)
+        if not force and not ran_worker and existing_units:
+            unit_count = len(existing_units)
+        else:
+            unit_count = _seed_units_from_source(
+                db,
+                document_id=document_id,
+                artifact_dir=artifact,
+                chunk_chars=chunk_chars,
+            )
         final_status = (
             DocumentStatus.OCR_COMPLETE_WITH_WARNINGS.value
             if warnings or failed_pages
@@ -391,6 +400,7 @@ def run_ocr_stage(
             "status": final_status,
             "config_hash": config_hash,
             "source_sha256": preflight.source_sha256,
+            "ocr_worker_ran": ran_worker,
         }
     finally:
         release_lock(doc_lock)

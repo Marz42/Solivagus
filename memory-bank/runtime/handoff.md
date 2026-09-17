@@ -19,27 +19,25 @@ paradigma:
 - Session: `SESSION-20260917-SQLITE-LOCK` (active)
 - Repository: `REPO-SOLIVAGUS`
 - Agent: cursor
-- Last checkpoint: `CHECKPOINT-20260917-SQLITE-LOCK-REPRO`
+- Last checkpoint: `CHECKPOINT-20260917-QA-OCR-P1`
 
 ## Checkpoint
 
-- Created: 2026-09-17T11:05:39.880011+08:00
+- Created: 2026-09-17T11:20:16.406675+08:00
 - Task status: active
-- Git commit: `dd3469aa3e405bfbaed12cb82ad9de4a3a21efb0`
-- Touched paths: .gitignore, memory-bank/knowledge/known-issues/index.md, memory-bank/knowledge/manuals/solivagus-phase8-batch.md, memory-bank/logs/changelog.md, memory-bank/logs/progress/index.md, memory-bank/runtime/active-session.yaml, memory-bank/runtime/handoff.md, scripts/soak_verify.py, src/solivagus/batch/supervisor.py, src/solivagus/database.py, src/solivagus/ocr/runner.py, src/solivagus/pipeline/translate.py, src/solivagus/providers/async_openai.py, src/solivagus/providers/openai_compatible.py, memory-bank/knowledge/known-issues/batch-sqlite-database-locked.md, memory-bank/logs/progress/2026-09-16-soak-prerun-4books.md, memory-bank/logs/progress/2026-09-17-sqlite-lock-repro.md, memory-bank/logs/progress/cp-20260917-sqlite-lock-input.yaml, memory-bank/runtime/sessions/SESSION-20260917-SQLITE-LOCK.yaml, tests/unit/test_sqlite_batch_lock.py
+- Git commit: `c7f1b24aee3269e9e284d52b8f9f6bae4d4a5099`
+- Touched paths: memory-bank/knowledge/known-issues/batch-sqlite-database-locked.md, memory-bank/logs/changelog.md, src/solivagus/ocr/runner.py, src/solivagus/qa/runner.py, tests/unit/test_solivagus_batch_phase8.py, tests/unit/test_solivagus_ocr_phase2.py, tests/unit/test_solivagus_qa_phase7.py, memory-bank/logs/progress/cp-20260917-qa-ocr-p1-input.yaml
 - Tests: passed
 
 ## Summary
 
-SQLite lock small-concurrency repro and FAILED persist
+Fix QA repair write-lock and OCR cache-hit unit wipe
 
 ## Completed Work
 
-- Reproduced uncommitted OCR INSERT blocking peer document UPDATE
-- OCR _record_batch commits immediately and before worker wait
-- Supervisor _persist_document_failed with retries; translate marks failed after RUNNING
-- tests.unit.test_sqlite_batch_lock 4/4 and batch phase8 tests green
-- Updated known-issue batch-sqlite-database-locked to mitigated-in-code
+- QA repair commits before/after each unit so peer writers succeed during second repair wait
+- OCR cache hit skips _seed_units_from_source when units already exist
+- Regression tests for QA peer write, OCR preserve DONE/bindings, batch double-run zero provider
 
 ## Remaining Work
 

@@ -156,6 +156,8 @@ def _run_qa_stage_unguarded(
             ]
             if high_or_medium:
                 try:
+                    # Ensure no open write txn before a network-bound repair call.
+                    db.commit()
                     fixed = repair_unit(
                         source=source,
                         translation=translation,
@@ -199,6 +201,8 @@ def _run_qa_stage_unguarded(
                             attempt_count=int(unit["attempt_count"] or 0) + 1,
                             warning_flags="qa_repaired",
                         )
+                        # Short txn: never hold a write lock across the next repair API call.
+                        db.commit()
                         translation = fixed
                         changed = True
                     else:

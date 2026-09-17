@@ -1,0 +1,58 @@
+coding_runtime_schema_version: '0.1'
+kind: coding_checkpoint
+snapshot_revision: 1
+checkpoint:
+  checkpoint_id: CHECKPOINT-20260917-QA-OCR-P1
+  task_id: TASK-20260804-P5
+  session_id: SESSION-20260917-SQLITE-LOCK
+  created_at: '2026-09-17T11:20:16.406675+08:00'
+  task_status: active
+  git:
+    repository_id: REPO-SOLIVAGUS
+    observed_at: '2026-09-17T11:20:16.406675+08:00'
+    head_commit: c7f1b24aee3269e9e284d52b8f9f6bae4d4a5099
+    branch: main
+    dirty: true
+    worktree_paths:
+    - memory-bank/knowledge/known-issues/batch-sqlite-database-locked.md
+    - memory-bank/logs/changelog.md
+    - src/solivagus/ocr/runner.py
+    - src/solivagus/qa/runner.py
+    - tests/unit/test_solivagus_batch_phase8.py
+    - tests/unit/test_solivagus_ocr_phase2.py
+    - tests/unit/test_solivagus_qa_phase7.py
+    - memory-bank/logs/progress/cp-20260917-qa-ocr-p1-input.yaml
+  tests:
+  - command: python -m unittest tests.unit.test_solivagus_qa_phase7 tests.unit.test_solivagus_ocr_phase2
+      tests.unit.test_solivagus_batch_phase8
+    status: passed
+    observed_at: '2026-09-17T11:20:16.406675+08:00'
+    exit_code: 0
+    passed_count: null
+    failed_count: null
+    skipped_count: null
+    duration_seconds: 1.437000000005355
+    report_path: null
+    output_hash: sha256:a108c71199abb19cd4b8876a348768ca2a922e1d3d9acac4e5bdec0361802547
+  builds: []
+  touched_paths:
+  - memory-bank/knowledge/known-issues/batch-sqlite-database-locked.md
+  - memory-bank/logs/changelog.md
+  - src/solivagus/ocr/runner.py
+  - src/solivagus/qa/runner.py
+  - tests/unit/test_solivagus_batch_phase8.py
+  - tests/unit/test_solivagus_ocr_phase2.py
+  - tests/unit/test_solivagus_qa_phase7.py
+  - memory-bank/logs/progress/cp-20260917-qa-ocr-p1-input.yaml
+  narrative:
+    summary: Fix QA repair write-lock and OCR cache-hit unit wipe
+    completed_work:
+    - QA repair commits before/after each unit so peer writers succeed during second repair wait
+    - OCR cache hit skips _seed_units_from_source when units already exist
+    - Regression tests for QA peer write, OCR preserve DONE/bindings, batch double-run zero provider
+    remaining_work:
+    - Same 4-book fixed-config recovery and zero-provider re-run
+    - Overnight SOAK after gates
+    blockers: []
+    next_steps:
+    - Run fixed-config 4-book recovery verification before formal SOAK
