@@ -9,6 +9,8 @@
 ## [Unreleased]
 
 ### Fixed
+- Batch SQLite：OCR `_record_batch` 立即 commit、worker 前再 commit，避免未提交写事务跨 OCR 等待；supervisor `_persist_document_failed` 重试落库；translate 在 RUNNING 后异常尽量落 `failed`；busy_timeout 30s 仅作辅助。小并发复现见 `tests/unit/test_sqlite_batch_lock.py`。
+- soak_verify：成功终态禁止 pending/running；明确 failed 允许 pending、禁止孤儿 running；未完成不得当成功。
 - Pandoc 规范化：先保护 fenced/inline code，再改 HTML img；inline math 排除金额歧义与转义 `$`。
 - Capsule JSON 自愈改为校验完整 payload（含重算 hash）；坏字段类型触发重写；soak_verify 同步。
 - Provider 入口统一写入 `provider-requests.jsonl`；soak 零调用以该日志为准，attempts 缩减不再误报通过。

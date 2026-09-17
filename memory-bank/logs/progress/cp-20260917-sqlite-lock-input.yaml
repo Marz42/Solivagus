@@ -1,0 +1,13 @@
+summary: SQLite lock small-concurrency repro and FAILED persist
+completed_work:
+  - Reproduced uncommitted OCR INSERT blocking peer document UPDATE
+  - OCR _record_batch commits immediately and before worker wait
+  - Supervisor _persist_document_failed with retries; translate marks failed after RUNNING
+  - tests.unit.test_sqlite_batch_lock 4/4 and batch phase8 tests green
+  - Updated known-issue batch-sqlite-database-locked to mitigated-in-code
+remaining_work:
+  - Same 4-book fixed-config recovery and zero-provider re-run
+  - Overnight SOAK after gates
+blockers: []
+next_steps:
+  - Run fixed-config 4-book recovery verification before formal SOAK

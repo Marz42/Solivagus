@@ -12,6 +12,8 @@ import httpx
 from solivagus.providers.openai_compatible import (
     FatalProviderError,
     ProviderError,
+    _client_headers,
+    _should_send_thinking,
     build_chat_endpoint,
     parse_chat_response,
     parse_retry_after,
@@ -55,12 +57,10 @@ async def call_chat_api_async(
         payload["user"] = user_id
     if send_temperature:
         payload["temperature"] = temperature
-    if disable_thinking:
+    if disable_thinking and _should_send_thinking(api_base):
         payload["thinking"] = {"type": "disabled"}
 
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    headers = _client_headers(api_key=api_key, session_id=user_id)
 
     owns_client = client is None
     http = client or httpx.AsyncClient(timeout=timeout)

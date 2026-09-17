@@ -18,11 +18,13 @@ class Database:
     def __init__(self, path: Path) -> None:
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(self.path)
+        self._conn = sqlite3.connect(self.path, timeout=30.0)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.execute("PRAGMA journal_mode = WAL")
-        self._conn.execute("PRAGMA busy_timeout = 5000")
+        # Auxiliary only: do not rely on this alone. OCR must not hold uncommitted
+        # write txns across worker subprocess waits (see ocr/runner.py).
+        self._conn.execute("PRAGMA busy_timeout = 30000")
         self.initialize()
 
     def close(self) -> None:

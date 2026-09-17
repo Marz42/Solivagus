@@ -721,146 +721,171 @@ def _run_translate_stage_unguarded(
         translation_status="running",
     )
 
-    if not partitions:
-        return _translate_without_partitions(
-            db,
-            document_id=document_id,
-            doc=doc,
-            settings=settings,
-            force=force,
-            strict=strict,
-            chat=chat,
-        )
-
-    document_title = Path(doc["display_name"]).stem
-    cache_root = translation_cache_root(settings.workspace)
-    cache_root.mkdir(parents=True, exist_ok=True)
-    usage_totals = empty_usage_totals()
-    assembled: list[dict[str, str]] = []
-    translated_count = 0
-    skipped = 0
-    warnings = 0
-    probe_summaries: list[dict[str, Any]] = []
-    # Always enter partition 1 with an empty capsule. Prior generations are cleared
-    # on replan; mid-doc resume rebuilds from stored/partition-skip recovery.
-    capsule: StyleCapsule = empty_capsule()
-    capsule_dir = artifact_dir / "style_capsules"
-    capsule_dir.mkdir(parents=True, exist_ok=True)
-
-    units_by_partition: dict[int | None, list[Any]] = {}
-    for unit in units:
-        pid = unit["partition_id"]
-        units_by_partition.setdefault(int(pid) if pid is not None else None, []).append(unit)
-
     try:
-        translated_count, skipped, warnings, assembled, probe_summaries = _run_partitions(
-            db,
-            document_id=document_id,
-            doc=doc,
-            units=units,
-            partitions=partitions,
-            units_by_partition=units_by_partition,
-            settings=settings,
-            artifact_dir=artifact_dir,
-            cache_root=cache_root,
-            chat=chat,
-            force=force,
-            strict=strict,
-            usage_totals=usage_totals,
-            document_title=document_title,
-            capsule=capsule,
-            capsule_dir=capsule_dir,
-            shared_global_gate=global_gate,
-        )
-    except FatalProviderError:
-        db.update_document_status(
-            document_id,
-            status=DocumentStatus.FAILED.value,
-            translation_status="failed",
-        )
-        db.commit()
-        raise
-
-    # Preserve sequence_index order across partitions.
-    assembled.sort(
-        key=lambda item: next(
-            (int(u["sequence_index"]) for u in units if u["unit_key"] == item["unit_key"]),
-            0,
-        )
-    )
-
-    assemble_outputs(
-        artifact_dir,
-        assembled,
-        document_title=document_title,
-        pdf_name=str(doc["display_name"]),
-        model=settings.llm_model,
-        make_bilingual=True,
-    )
-    report = {
-        "document_id": document_id,
-        "model": settings.llm_model,
-        "prompt_version": settings.prompt_version,
-        "target_mode": settings.target_mode,
-        "totals": usage_totals,
-        "partitions": probe_summaries,
-    }
-    report_path = write_usage_report(artifact_dir, report)
-    db.record_artifact(
-        document_id,
-        "usage_report",
-        str(report_path),
-        sha256_text(report_path.read_text(encoding="utf-8")),
-    )
-
-    final_status = (
-        DocumentStatus.TRANSLATION_COMPLETE_WITH_WARNINGS.value
-        if warnings or any(p["probe_decision"] != "full" for p in probe_summaries)
-        else DocumentStatus.TRANSLATION_COMPLETE.value
-    )
-    db.update_document_status(
-        document_id,
-        status=final_status,
-        translation_status="complete_with_warnings"
-        if final_status.endswith("warnings")
-        else "complete",
-    )
-    for name in ("translated.zh.md", "translated.bilingual.md"):
-        path = artifact_dir / name
-        if path.is_file():
-            db.record_artifact(
-                document_id, name, str(path), sha256_text(path.read_text(encoding="utf-8"))
+        if not partitions:
+            return _translate_without_partitions(
+                db,
+                document_id=document_id,
+                doc=doc,
+                settings=settings,
+                force=force,
+                strict=strict,
+                chat=chat,
             )
 
-    from solivagus.pipeline.manifest import write_document_manifest
+        document_title = Path(doc["display_name"]).stem
+        cache_root = translation_cache_root(settings.workspace)
+        cache_root.mkdir(parents=True, exist_ok=True)
+        usage_totals = empty_usage_totals()
+        assembled: list[dict[str, str]] = []
+        translated_count = 0
+        skipped = 0
+        warnings = 0
+        probe_summaries: list[dict[str, Any]] = []
+        # Always enter partition 1 with an empty capsule. Prior generations are cleared
+        # on replan; mid-doc resume rebuilds from stored/partition-skip recovery.
+        capsule: StyleCapsule = empty_capsule()
+        capsule_dir = artifact_dir / "style_capsules"
+        capsule_dir.mkdir(parents=True, exist_ok=True)
 
-    manifest_path = write_document_manifest(
-        artifact_dir,
-        document_id=document_id,
-        display_name=str(doc["display_name"]),
-        source_sha256=str(doc["source_sha256"]),
-        status=final_status,
-        model=settings.llm_model,
-        extra={"translated": translated_count, "warnings": warnings},
-    )
-    db.record_artifact(
-        document_id,
-        "manifest",
-        str(manifest_path),
-        sha256_text(manifest_path.read_text(encoding="utf-8")),
-    )
-    db.commit()
-    return {
-        "document_id": document_id,
-        "translated": translated_count,
-        "skipped": skipped,
-        "warnings": warnings,
-        "artifact_dir": str(artifact_dir),
-        "status": final_status,
-        "mode": "partition_cache",
-        "usage_report": str(report_path),
-        "manifest": str(manifest_path),
-        "cache_hit_tokens": usage_totals.get("cache_hit_tokens", 0),
-        "local_cache_hits": usage_totals.get("local_cache_hits", 0),
-        "partitions": probe_summaries,
-    }
+        units_by_partition: dict[int | None, list[Any]] = {}
+        for unit in units:
+            pid = unit["partition_id"]
+            units_by_partition.setdefault(
+                int(pid) if pid is not None else None, []
+            ).append(unit)
+
+        try:
+            translated_count, skipped, warnings, assembled, probe_summaries = (
+                _run_partitions(
+                    db,
+                    document_id=document_id,
+                    doc=doc,
+                    units=units,
+                    partitions=partitions,
+                    units_by_partition=units_by_partition,
+                    settings=settings,
+                    artifact_dir=artifact_dir,
+                    cache_root=cache_root,
+                    chat=chat,
+                    force=force,
+                    strict=strict,
+                    usage_totals=usage_totals,
+                    document_title=document_title,
+                    capsule=capsule,
+                    capsule_dir=capsule_dir,
+                    shared_global_gate=global_gate,
+                )
+            )
+        except FatalProviderError:
+            db.update_document_status(
+                document_id,
+                status=DocumentStatus.FAILED.value,
+                translation_status="failed",
+            )
+            db.commit()
+            raise
+
+        # Preserve sequence_index order across partitions.
+        assembled.sort(
+            key=lambda item: next(
+                (
+                    int(u["sequence_index"])
+                    for u in units
+                    if u["unit_key"] == item["unit_key"]
+                ),
+                0,
+            )
+        )
+
+        assemble_outputs(
+            artifact_dir,
+            assembled,
+            document_title=document_title,
+            pdf_name=str(doc["display_name"]),
+            model=settings.llm_model,
+            make_bilingual=True,
+        )
+        report = {
+            "document_id": document_id,
+            "model": settings.llm_model,
+            "prompt_version": settings.prompt_version,
+            "target_mode": settings.target_mode,
+            "totals": usage_totals,
+            "partitions": probe_summaries,
+        }
+        report_path = write_usage_report(artifact_dir, report)
+        db.record_artifact(
+            document_id,
+            "usage_report",
+            str(report_path),
+            sha256_text(report_path.read_text(encoding="utf-8")),
+        )
+
+        final_status = (
+            DocumentStatus.TRANSLATION_COMPLETE_WITH_WARNINGS.value
+            if warnings or any(p["probe_decision"] != "full" for p in probe_summaries)
+            else DocumentStatus.TRANSLATION_COMPLETE.value
+        )
+        db.update_document_status(
+            document_id,
+            status=final_status,
+            translation_status="complete_with_warnings"
+            if final_status.endswith("warnings")
+            else "complete",
+        )
+        for name in ("translated.zh.md", "translated.bilingual.md"):
+            path = artifact_dir / name
+            if path.is_file():
+                db.record_artifact(
+                    document_id,
+                    name,
+                    str(path),
+                    sha256_text(path.read_text(encoding="utf-8")),
+                )
+
+        from solivagus.pipeline.manifest import write_document_manifest
+
+        manifest_path = write_document_manifest(
+            artifact_dir,
+            document_id=document_id,
+            display_name=str(doc["display_name"]),
+            source_sha256=str(doc["source_sha256"]),
+            status=final_status,
+            model=settings.llm_model,
+            extra={"translated": translated_count, "warnings": warnings},
+        )
+        db.record_artifact(
+            document_id,
+            "manifest",
+            str(manifest_path),
+            sha256_text(manifest_path.read_text(encoding="utf-8")),
+        )
+        db.commit()
+        return {
+            "document_id": document_id,
+            "translated": translated_count,
+            "skipped": skipped,
+            "warnings": warnings,
+            "artifact_dir": str(artifact_dir),
+            "status": final_status,
+            "mode": "partition_cache",
+            "usage_report": str(report_path),
+            "manifest": str(manifest_path),
+            "cache_hit_tokens": usage_totals.get("cache_hit_tokens", 0),
+            "local_cache_hits": usage_totals.get("local_cache_hits", 0),
+            "partitions": probe_summaries,
+        }
+    except FatalProviderError:
+        raise
+    except Exception:
+        # Any non-provider failure after RUNNING must not leave orphan mid-state.
+        try:
+            db.update_document_status(
+                document_id,
+                status=DocumentStatus.FAILED.value,
+                translation_status="failed",
+            )
+        except Exception:  # noqa: BLE001
+            pass
+        raise

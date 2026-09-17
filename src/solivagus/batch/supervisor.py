@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import traceback
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -34,6 +35,34 @@ OcrFn = Callable[..., dict[str, Any]]
 PlanFn = Callable[..., dict[str, Any]]
 TranslateFn = Callable[..., dict[str, Any]]
 QaFn = Callable[..., dict[str, Any]]
+
+
+def _persist_document_failed(
+    workspace: Path,
+    document_id: int,
+    *,
+    ocr: bool = False,
+    translation: bool = False,
+    attempts: int = 8,
+) -> bool:
+    """Best-effort FAILED落库 under transient SQLite busy/locked."""
+    last: Exception | None = None
+    for i in range(max(1, attempts)):
+        try:
+            with _open_db(workspace) as db:
+                db.update_document_status(
+                    int(document_id),
+                    status=DocumentStatus.FAILED.value,
+                    ocr_status="failed" if ocr else None,
+                    translation_status="failed" if translation else None,
+                )
+            return True
+        except Exception as exc:  # noqa: BLE001
+            last = exc
+            time.sleep(min(2.0, 0.05 * (2**i)))
+    if last is not None:
+        return False
+    return False
 
 
 @dataclass
@@ -197,26 +226,50 @@ def run_batch(
                 stages={**job.stages, "ocr_error": traceback.format_exc()},
             )
             try:
-                with _open_db(settings.workspace) as db:
-                    from solivagus.workspace import default_artifact_dir
+                from solivagus.workspace import default_artifact_dir
 
-                    sha = (
-                        sha256_file(job.pdf_path)
-                        if job.pdf_path.is_file()
-                        else sha256_text(str(job.pdf_path))
-                    )
-                    artifact = default_artifact_dir(job.pdf_path)
-                    doc_id = db.upsert_document(
-                        source_path=str(job.pdf_path),
-                        source_sha256=sha,
-                        display_name=job.pdf_path.name,
-                        artifact_dir=str(artifact),
-                        status=DocumentStatus.FAILED.value,
-                        ocr_status="failed",
-                    )
+                sha = (
+                    sha256_file(job.pdf_path)
+                    if job.pdf_path.is_file()
+                    else sha256_text(str(job.pdf_path))
+                )
+                artifact = default_artifact_dir(job.pdf_path)
+                last_upsert_err: Exception | None = None
+                doc_id: int | None = None
+                for i in range(8):
+                    try:
+                        with _open_db(settings.workspace) as db:
+                            doc_id = db.upsert_document(
+                                source_path=str(job.pdf_path),
+                                source_sha256=sha,
+                                display_name=job.pdf_path.name,
+                                artifact_dir=str(artifact),
+                                status=DocumentStatus.FAILED.value,
+                                ocr_status="failed",
+                            )
+                            db.commit()
+                        break
+                    except Exception as upsert_exc:  # noqa: BLE001
+                        last_upsert_err = upsert_exc
+                        time.sleep(min(2.0, 0.05 * (2**i)))
+                if doc_id is not None:
                     mark(job, document_id=doc_id, artifact_dir=str(artifact))
-            except Exception:  # noqa: BLE001
-                pass
+                elif last_upsert_err is not None:
+                    mark(
+                        job,
+                        stages={
+                            **job.stages,
+                            "ocr_failed_persist_error": repr(last_upsert_err),
+                        },
+                    )
+            except Exception as persist_exc:  # noqa: BLE001
+                mark(
+                    job,
+                    stages={
+                        **job.stages,
+                        "ocr_failed_persist_error": repr(persist_exc),
+                    },
+                )
             if not cont:
                 stop_translate.set()
                 raise
@@ -265,15 +318,19 @@ def run_batch(
                 stages={**job.stages, "translate_error": traceback.format_exc()},
             )
             if job.document_id is not None:
-                try:
-                    with _open_db(settings.workspace) as db:
-                        db.update_document_status(
-                            int(job.document_id),
-                            status=DocumentStatus.FAILED.value,
-                            translation_status="failed",
-                        )
-                except Exception:  # noqa: BLE001
-                    pass
+                ok = _persist_document_failed(
+                    settings.workspace,
+                    int(job.document_id),
+                    translation=True,
+                )
+                if not ok:
+                    mark(
+                        job,
+                        stages={
+                            **job.stages,
+                            "translate_failed_persist_error": "database failed mark did not stick",
+                        },
+                    )
             if not cont:
                 stop_translate.set()
                 raise

@@ -3,7 +3,7 @@ type: paradigma-manual
 title: Solivagus Phase 8 Batch and Task Scheduler
 description: Configurable batch directory, dual queues, profiles, and Windows Task Scheduler setup for overnight runs.
 tags: [manual, batch, phase8, task-scheduler, solivagus]
-timestamp: 2026-09-15T15:51:49+08:00
+timestamp: 2026-09-17T10:39:03+08:00
 paradigma:
   schema_version: "0.1"
   temperature: warm
@@ -84,21 +84,24 @@ OCR 保持单 worker；翻译队列 FIFO，与 OCR 并行（先完成 OCR 的文
 
 # Soak (two phases)
 
-## Phase 1 — two-paper pre-run
+> 2026-09-16/17 四本预跑：**有价值，未通过 SOAK**。阻断项为 SQLite 写入冲突（调查中，勿仅加 timeout）。暂不扩大文档规模。详见 `logs/progress/2026-09-16-soak-prerun-4books.md`。
 
-1. 准备仅含两篇 PDF 的目录（可用 `example/Attention Is All You Need.pdf` + `example/Qwen3_TTS.pdf` 复制到独立 inbox，勿直接扫整个 `example/`）。
-2. 编辑并运行 `scripts/soak-prerun.ps1`（`$BatchDir`；默认 workspace=`soak-workspace/prerun`，避免污染仓库根 `.solivagus`）。
-3. 用 `scripts/soak_verify.py` 核对预跑门禁：
-   - 无 `pending`/`running` Unit；
-   - 完成 Partition 同时有 SQLite capsule 与 `style_capsules/vN.json`，且 `content_hash`/version/partition 一致；
-   - `qa_complete` 文档具备 `translated.zh.md` / `translated.bilingual.md` / `qa-report.md`；
-   - 再跑一遍同一目录后 `--compare-attempts` 的 provider 调用增量必须为 0。
+## Phase 1 — controlled pre-run
+
+1. 独立 inbox + `soak-workspace/prerun`；固定提交 / 供应商 / 配置。
+2. `scripts/soak-prerun.ps1` 或等价 batch；失败后用**同一命令**重跑验证自动恢复。
+3. `scripts/soak_verify.py` 门禁（修订口径）：
+   - 成功终态（`qa_complete` / translation complete*）：无 `pending`、无 `running`；
+   - 明确 `failed`（可恢复）：允许 `pending`；**禁止**无执行者的 `running`；
+   - 不得把未完成文档标成成功（如残留 `translation_running`）；
+   - 完成 Partition：capsule DB↔JSON payload 一致；
+   - 成功文档具备译文 / 双语 /（qa 时）qa-report；
+   - 完成态再跑：`provider-requests.jsonl` 增量必须为 0（不以 attempts 单独定论）。
+4. 表格 QA HIGH：抽样解释真实改写 vs 误报；`keep` 下不靠放宽门禁过关。
 
 ## Phase 2 — ≥12h unattended
 
-1. 编辑 `scripts/night-batch.ps1` 的 `$BatchDir` / `$Profile`（建议 `balanced`）。
-2. Task Scheduler 或手动启动；次日 `solivagus report` + `python scripts/soak_verify.py --workspace …`。
-3. 正式通过后再跑 `pd check --dry-run`、完整测试、`pd catalog verify` / `pd runtime verify`，再考虑关闭本手册关联的 production-gate known-issue 与 ADR-002。
+仅当：DB 锁复现并修复、四本固定配置恢复+零请求重跑通过、表格 HIGH 解释完毕。然后 `night-batch.ps1` / Task Scheduler；次日 report + verify + `pd check` / 测试 / catalog·runtime verify。
 
 # Verification
 

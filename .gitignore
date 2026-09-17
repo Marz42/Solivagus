@@ -48,7 +48,7 @@ htmlcov/
 # ============================================================
 # Full local fixture directory (PDFs, HTML, MD, MVP outputs, private pins)
 example/
-
+soak-inbox/
 # Formal workspace + MVP sidecars
 .solivagus/
 **/.solivagus/

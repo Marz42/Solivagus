@@ -1,0 +1,83 @@
+coding_runtime_schema_version: '0.1'
+kind: coding_checkpoint
+snapshot_revision: 1
+checkpoint:
+  checkpoint_id: CHECKPOINT-20260917-SQLITE-LOCK-REPRO
+  task_id: TASK-20260804-P5
+  session_id: SESSION-20260917-SQLITE-LOCK
+  created_at: '2026-09-17T11:05:39.880011+08:00'
+  task_status: active
+  git:
+    repository_id: REPO-SOLIVAGUS
+    observed_at: '2026-09-17T11:05:39.880011+08:00'
+    head_commit: dd3469aa3e405bfbaed12cb82ad9de4a3a21efb0
+    branch: main
+    dirty: true
+    worktree_paths:
+    - .gitignore
+    - memory-bank/knowledge/known-issues/index.md
+    - memory-bank/knowledge/manuals/solivagus-phase8-batch.md
+    - memory-bank/logs/changelog.md
+    - memory-bank/logs/progress/index.md
+    - memory-bank/runtime/active-session.yaml
+    - memory-bank/runtime/handoff.md
+    - scripts/soak_verify.py
+    - src/solivagus/batch/supervisor.py
+    - src/solivagus/database.py
+    - src/solivagus/ocr/runner.py
+    - src/solivagus/pipeline/translate.py
+    - src/solivagus/providers/async_openai.py
+    - src/solivagus/providers/openai_compatible.py
+    - memory-bank/knowledge/known-issues/batch-sqlite-database-locked.md
+    - memory-bank/logs/progress/2026-09-16-soak-prerun-4books.md
+    - memory-bank/logs/progress/2026-09-17-sqlite-lock-repro.md
+    - memory-bank/logs/progress/cp-20260917-sqlite-lock-input.yaml
+    - memory-bank/runtime/sessions/SESSION-20260917-SQLITE-LOCK.yaml
+    - tests/unit/test_sqlite_batch_lock.py
+  tests:
+  - command: python -m unittest tests.unit.test_sqlite_batch_lock tests.unit.test_solivagus_batch_phase8
+    status: passed
+    observed_at: '2026-09-17T11:05:39.880011+08:00'
+    exit_code: 0
+    passed_count: null
+    failed_count: null
+    skipped_count: null
+    duration_seconds: 2.25
+    report_path: null
+    output_hash: sha256:7b62c4e366cddc8774d4ad0e7459643be9c11cbcab188a4de499a48af9278fd7
+  builds: []
+  touched_paths:
+  - .gitignore
+  - memory-bank/knowledge/known-issues/index.md
+  - memory-bank/knowledge/manuals/solivagus-phase8-batch.md
+  - memory-bank/logs/changelog.md
+  - memory-bank/logs/progress/index.md
+  - memory-bank/runtime/active-session.yaml
+  - memory-bank/runtime/handoff.md
+  - scripts/soak_verify.py
+  - src/solivagus/batch/supervisor.py
+  - src/solivagus/database.py
+  - src/solivagus/ocr/runner.py
+  - src/solivagus/pipeline/translate.py
+  - src/solivagus/providers/async_openai.py
+  - src/solivagus/providers/openai_compatible.py
+  - memory-bank/knowledge/known-issues/batch-sqlite-database-locked.md
+  - memory-bank/logs/progress/2026-09-16-soak-prerun-4books.md
+  - memory-bank/logs/progress/2026-09-17-sqlite-lock-repro.md
+  - memory-bank/logs/progress/cp-20260917-sqlite-lock-input.yaml
+  - memory-bank/runtime/sessions/SESSION-20260917-SQLITE-LOCK.yaml
+  - tests/unit/test_sqlite_batch_lock.py
+  narrative:
+    summary: SQLite lock small-concurrency repro and FAILED persist
+    completed_work:
+    - Reproduced uncommitted OCR INSERT blocking peer document UPDATE
+    - OCR _record_batch commits immediately and before worker wait
+    - Supervisor _persist_document_failed with retries; translate marks failed after RUNNING
+    - tests.unit.test_sqlite_batch_lock 4/4 and batch phase8 tests green
+    - Updated known-issue batch-sqlite-database-locked to mitigated-in-code
+    remaining_work:
+    - Same 4-book fixed-config recovery and zero-provider re-run
+    - Overnight SOAK after gates
+    blockers: []
+    next_steps:
+    - Run fixed-config 4-book recovery verification before formal SOAK

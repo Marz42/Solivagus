@@ -128,6 +128,9 @@ def _record_batch(
             utc_now(),
         ),
     )
+    # Commit immediately so batch OCR never holds a write txn across the next
+    # worker() wait while translate threads write the same state.db.
+    db.commit()
 
 
 def _seed_units_from_source(
@@ -277,6 +280,8 @@ def run_ocr_stage(
             directory = batch_dir(artifact, batch_index)
 
             try:
+                # Release any open write txn before long-running worker subprocess.
+                db.commit()
                 result = worker(
                     pdf_path,
                     artifact,

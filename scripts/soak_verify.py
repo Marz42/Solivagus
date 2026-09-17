@@ -27,15 +27,6 @@ if str(_REPO / "src") not in sys.path:
 from solivagus.style.capsule import StyleCapsule  # noqa: E402
 from solivagus.workspace import state_db_path  # noqa: E402
 
-TERMINAL_DOC_OK = frozenset(
-    {
-        "qa_complete",
-        "translation_complete",
-        "translation_complete_with_warnings",
-        "failed",
-        "cancelled",
-    }
-)
 SUCCESS_DOC = frozenset(
     {
         "qa_complete",
@@ -43,7 +34,11 @@ SUCCESS_DOC = frozenset(
         "translation_complete_with_warnings",
     }
 )
-RESIDUAL_UNIT = frozenset({"pending", "running"})
+FAILED_DOC = frozenset({"failed", "cancelled"})
+TERMINAL_DOC_OK = SUCCESS_DOC | FAILED_DOC
+RESIDUAL_RUNNING = frozenset({"running"})
+RESIDUAL_PENDING = frozenset({"pending"})
+RESIDUAL_UNIT = RESIDUAL_RUNNING | RESIDUAL_PENDING  # legacy alias for mid-run messaging
 COMPLETE_PARTITION_STATUS = frozenset({"ready", "ready_low_cache", "degraded"})
 REQUIRED_ARTIFACTS = (
     "source.md",
@@ -314,13 +309,22 @@ def _verify_document(
             )
         )
 
-    # 2) No residual pending/running on terminal docs
-    residual = [
-        f"{u['unit_key']}={u['status']}"
+    # 2) Unit residuals by document outcome
+    # - success: no pending, no running
+    # - explicit failed/cancelled (recoverable): pending OK; orphan running NOT OK
+    # - mid-run: warn only
+    running = [
+        f"{u['unit_key']}=running"
         for u in units
-        if str(u["status"]) in RESIDUAL_UNIT
+        if str(u["status"]) in RESIDUAL_RUNNING
     ]
-    if report.status in TERMINAL_DOC_OK:
+    pending = [
+        f"{u['unit_key']}=pending"
+        for u in units
+        if str(u["status"]) in RESIDUAL_PENDING
+    ]
+    if report.status in SUCCESS_DOC:
+        residual = running + pending
         report.checks.append(
             CheckResult(
                 "no_residual_units",
@@ -328,17 +332,48 @@ def _verify_document(
                 "ok" if not residual else f"residual: {', '.join(residual[:12])}",
             )
         )
-    elif residual:
+    elif report.status in FAILED_DOC:
+        report.checks.append(
+            CheckResult(
+                "no_orphan_running_units",
+                not running,
+                (
+                    "ok (pending allowed on failed/recoverable docs)"
+                    if not running
+                    else f"orphan running: {', '.join(running[:12])}"
+                ),
+            )
+        )
+        if pending:
+            report.checks.append(
+                CheckResult(
+                    "pending_on_failed_ok",
+                    True,
+                    f"pending={len(pending)} (allowed until recovery)",
+                    severity="warn",
+                )
+            )
+    elif running or pending:
         report.checks.append(
             CheckResult(
                 "no_residual_units",
                 True,
-                f"in-flight residual ({len(residual)}) — expected mid-run",
+                f"in-flight residual running={len(running)} pending={len(pending)}",
                 severity="warn",
             )
         )
     else:
         report.checks.append(CheckResult("no_residual_units", True, "no residual"))
+
+    # Incomplete must never look like success (status already gated above).
+    if report.status in {"translation_running", "ocr_running", "planning"} and require_ok_terminal:
+        report.checks.append(
+            CheckResult(
+                "incomplete_not_success",
+                False,
+                f"status={report.status} left mid-pipeline (batch should mark failed or resume)",
+            )
+        )
 
     # 3) Artifacts for successful docs
     if report.status in SUCCESS_DOC:

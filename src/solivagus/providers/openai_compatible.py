@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 from urllib import error, request
 
@@ -66,6 +67,33 @@ def build_chat_endpoint(api_base: str) -> str:
     if base.endswith("/chat/completions"):
         return base
     return base + "/chat/completions"
+
+
+def _client_headers(*, api_key: str | None, session_id: str | None = None) -> dict[str, str]:
+    """HTTP headers for chat providers.
+
+    OpenCode Go (and similar gateways) reject generic library User-Agents
+    (Cloudflare 403/1010) and ask for a stable session header.
+    """
+    from solivagus import __version__
+
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": f"solivagus/{__version__}",
+        "Accept": "application/json",
+    }
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    # Prefer document user_id as session; fall back to a process-stable id.
+    sid = (session_id or "").strip() or f"solivagus-proc-{os.getpid()}"
+    headers["x-opencode-session"] = sid[:128]
+    return headers
+
+
+def _should_send_thinking(api_base: str) -> bool:
+    """DeepSeek official API accepts thinking; many OpenAI-compatible proxies do not."""
+    host = api_base.lower()
+    return "deepseek.com" in host
 
 
 def parse_chat_response(response: dict[str, Any]) -> tuple[str, str | None, dict[str, Any]]:
@@ -133,15 +161,11 @@ def call_chat_api(
         payload["user"] = user_id
     if send_temperature:
         payload["temperature"] = temperature
-    if disable_thinking:
+    if disable_thinking and _should_send_thinking(api_base):
         payload["thinking"] = {"type": "disabled"}
 
     data = json.dumps(payload).encode("utf-8")
-    headers = {
-        "Content-Type": "application/json",
-    }
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    headers = _client_headers(api_key=api_key, session_id=user_id)
 
     req = request.Request(endpoint, data=data, headers=headers, method="POST")
     try:
